@@ -13,12 +13,16 @@ class AttendanceRepository {
   };
 
   Future<List<Attendance>> getAttendance() async {
-    final response = await http.get(Uri.parse(ApiConfig.attendanceUrl), headers: _headers);
-    if (response.statusCode == 200) {
-      final List data = jsonDecode(response.body);
-      return data.map((a) => Attendance.fromMap(a)).toList();
-    } else {
-      throw Exception('Failed to load attendance');
+    try {
+      final response = await http.get(Uri.parse(ApiConfig.attendanceUrl), headers: _headers)
+          .timeout(const Duration(seconds: 45));
+      if (response.statusCode == 200) {
+        final List data = jsonDecode(response.body);
+        return data.map((a) => Attendance.fromMap(a)).toList();
+      }
+      return [];
+    } catch (e) {
+      return []; // Return empty on error to prevent crashes, provider handles retry
     }
   }
 
@@ -27,9 +31,10 @@ class AttendanceRepository {
       Uri.parse(ApiConfig.attendanceUrl),
       headers: _headers,
       body: jsonEncode(attendance.toMap()),
-    );
+    ).timeout(const Duration(seconds: 45));
+    
     if (response.statusCode != 201 && response.statusCode != 200) {
-      throw Exception('Failed to mark attendance');
+      throw Exception('Failed to save (Status: ${response.statusCode})');
     }
   }
 }

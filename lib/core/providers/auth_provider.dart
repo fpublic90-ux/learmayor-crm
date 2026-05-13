@@ -8,6 +8,8 @@ import 'package:image_picker/image_picker.dart';
 import '../config/api_config.dart';
 import '../../app/globals.dart';
 
+enum UserRole { admin, employee, intern }
+
 class AuthProvider extends ChangeNotifier {
   // Secure storage for sensitive JWT token
   final _storage = const FlutterSecureStorage();
@@ -16,6 +18,7 @@ class AuthProvider extends ChangeNotifier {
   String? _userName;
   String? _userEmail;
   String? _token;
+  UserRole _role = UserRole.employee;
   
   // Admin's profile photo stored locally
   String? _profilePicUrl;
@@ -23,6 +26,7 @@ class AuthProvider extends ChangeNotifier {
   // Flag for demo/offline access
   bool _isDemoUser = false;
   bool _isLoading = false;
+  List<Map<String, dynamic>> _allUsers = [];
 
   AuthProvider() {
     _loadSession();
@@ -33,8 +37,11 @@ class AuthProvider extends ChangeNotifier {
   String? get userName => _userName;
   String? get userEmail => _userEmail;
   String? get token => _token;
+  UserRole get role => _role;
+  bool get isAdmin => _role == UserRole.admin;
   bool get isLoading => _isLoading;
   bool get isLoggedIn => _token != null || _isDemoUser;
+  List<Map<String, dynamic>> get allUsers => _allUsers;
 
   // Loads session from storage
   Future<void> _loadSession() async {
@@ -44,6 +51,16 @@ class AuthProvider extends ChangeNotifier {
     _userEmail = prefs.getString('user_email');
     _profilePicUrl = prefs.getString('admin_photo');
     _isDemoUser = prefs.getBool('is_demo') ?? false;
+    
+    // Determine role based on email or saved role
+    final savedRole = prefs.getString('user_role');
+    if (_userEmail == 'jafarevx123@gmail.com') {
+      _role = UserRole.admin;
+    } else if (savedRole != null) {
+      _role = UserRole.values.firstWhere((e) => e.name == savedRole, orElse: () => UserRole.employee);
+    } else {
+      _role = UserRole.employee;
+    }
     
     debugPrint('🔐 Auth: Session Loaded. Token present: ${_token != null}');
     
@@ -73,8 +90,8 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // Custom Login
-  Future<void> login(String email, String password) async {
+  // Custom Login with optional role override for registration
+  Future<void> login(String email, String password, {UserRole? manualRole}) async {
     _isLoading = true;
     notifyListeners();
     
@@ -100,22 +117,49 @@ class AuthProvider extends ChangeNotifier {
             _userName = data['name'];
             _userEmail = data['email'];
             
-            debugPrint('💾 Auth: Saving Session to Storage...');
+            if (_userEmail == 'jafarevx123@gmail.com') {
+              _role = UserRole.admin;
+            } else if (manualRole != null) {
+              _role = manualRole;
+            } else {
+              _role = UserRole.values.firstWhere(
+                (e) => e.name == data['role'], 
+                orElse: () => UserRole.employee
+              );
+            }
+            
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('jwt_token', _token!);
             await prefs.setString('user_name', _userName!);
             await prefs.setString('user_email', _userEmail!);
+            await prefs.setString('user_role', _role.name);
             
-            debugPrint('✅ Auth: Login Success!');
+            debugPrint('✅ Auth: Login Success as ${_role.name}!');
             return; 
           } else {
             final data = jsonDecode(response.body);
-            debugPrint('❌ Auth: Backend Rejected (Status ${response.statusCode}): ${data['error']}');
-            throw Exception(data['error'] ?? 'Login failed');
+            final error = data['error'] ?? 'Login failed';
+            debugPrint('❌ Auth: Backend Rejected (Status ${response.statusCode}): $error');
+            
+            // Critical Fix: Do NOT retry on 4xx (Client errors) or Rate Limits
+            if (response.statusCode >= 400 && response.statusCode < 500) {
+              throw Exception(error);
+            }
+            
+            throw Exception('Server error (${response.statusCode})');
           }
-        } catch (e) {
+        } on Exception catch (e) {
           debugPrint('⏳ Auth: Attempt $attempts failed: $e');
-          if (attempts >= maxAttempts) rethrow;
+          
+          // Only retry if it's a potential temporary network issue or server glitch
+          final errorStr = e.toString().toLowerCase();
+          final isRateLimit = errorStr.contains('too many attempts') || errorStr.contains('429');
+          final isAuthError = errorStr.contains('invalid') || errorStr.contains('unauthorized');
+
+          if (attempts >= maxAttempts || isRateLimit || isAuthError) {
+             rethrow;
+          }
+          
           await Future.delayed(const Duration(seconds: 2));
         }
       }
@@ -129,7 +173,18 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updateProfile({String? name, String? email, String? oldPassword, String? newPassword}) async {
+  Future<void> refreshLocalProfile({required String name, String? email}) async {
+    _userName = name;
+    if (email != null) _userEmail = email;
+    
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_name', _userName!);
+    if (email != null) await prefs.setString('user_email', _userEmail!);
+    
+    notifyListeners();
+  }
+
+  Future<void> updateProfile({String? name, String? email, String? oldPassword, String? newPassword, String? photoUrl}) async {
     _isLoading = true;
     notifyListeners();
     
@@ -145,6 +200,7 @@ class AuthProvider extends ChangeNotifier {
           if (email != null) 'email': email,
           if (oldPassword != null) 'oldPassword': oldPassword,
           if (newPassword != null) 'newPassword': newPassword,
+          if (photoUrl != null) 'photoUrl': photoUrl,
         }),
       );
 
@@ -153,11 +209,15 @@ class AuthProvider extends ChangeNotifier {
         _userName = data['name'];
         _userEmail = data['email'];
         _token = data['token'];
+        _profilePicUrl = data['photoUrl'] ?? _profilePicUrl;
         
         await _storage.write(key: 'jwt_token', value: _token);
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user_name', _userName!);
         await prefs.setString('user_email', _userEmail!);
+        if (_profilePicUrl != null) {
+          await prefs.setString('admin_photo', _profilePicUrl!);
+        }
       } else {
         final data = jsonDecode(response.body);
         throw Exception(data['error'] ?? 'Update failed');
@@ -197,6 +257,55 @@ class AuthProvider extends ChangeNotifier {
   void bypassLogin() {
     _isDemoUser = true;
     notifyListeners();
+  }
+
+  // Fetch all registered users (Admin only)
+  Future<void> fetchAllUsers() async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final response = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/auth/users'),
+        headers: {'Authorization': 'Bearer $_token'},
+      ).timeout(const Duration(seconds: 5)); // 5-second Executive Timeout
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        _allUsers = data.cast<Map<String, dynamic>>();
+      }
+    } catch (e) {
+      debugPrint('Error fetching users: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // Delete a user account permanently (Admin only)
+  Future<bool> deleteUser(String email) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final response = await http.delete(
+        Uri.parse('${ApiConfig.baseUrl}/auth/users/$email'),
+        headers: {'Authorization': 'Bearer $_token'},
+      ).timeout(const Duration(seconds: 10));
+      
+      if (response.statusCode == 200) {
+        debugPrint('✅ Auth: User $email deleted from database');
+        await fetchAllUsers(); // Refresh list
+        return true;
+      } else {
+        final data = jsonDecode(response.body);
+        debugPrint('❌ Auth: Delete failed: ${data['error']}');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Error deleting user: $e');
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   // Wake up the server early to handle cold starts

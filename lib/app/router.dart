@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../core/providers/auth_provider.dart';
 import '../features/auth/login_screen.dart';
@@ -11,19 +10,38 @@ import '../features/interns/add_edit_intern_screen.dart';
 import '../features/interns/intern_detail_screen.dart';
 import '../features/attendance/attendance_screen.dart';
 import '../features/reports/reports_screen.dart';
+import '../features/reports/admin_reports_list_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../features/staff/staff_hub_screen.dart';
+import '../features/staff/submit_report_screen.dart';
+import '../features/dashboard/onboarding_vault_screen.dart';
 import 'shell_layout.dart';
 
 class AppRouter {
   static GoRouter getRouter(AuthProvider auth) {
     return GoRouter(
       initialLocation: '/login',
-      redirect: (context, state) {
+      redirect: (context, state) { 
         final isLoggedIn = auth.isLoggedIn;
         final isOnLogin = state.matchedLocation == '/login';
         
         if (!isLoggedIn && !isOnLogin) return '/login';
-        if (isLoggedIn && isOnLogin) return '/dashboard';
+        if (isLoggedIn && isOnLogin) {
+          return auth.isAdmin ? '/dashboard' : '/staff/hub';
+        }
+
+        // Security Guard: Prevent Staff from accessing Admin-only directories
+        if (isLoggedIn && !auth.isAdmin) {
+          final adminOnlyRoutes = ['/dashboard', '/employees', '/interns', '/onboarding'];
+          if (adminOnlyRoutes.any((route) => state.matchedLocation.startsWith(route))) {
+            return '/staff/hub';
+          }
+        }
+
+        // Optional: Prevent Admin from accessing Staff Hub (send to Dashboard)
+        if (isLoggedIn && auth.isAdmin && state.matchedLocation.startsWith('/staff')) {
+          return '/dashboard';
+        }
         
         return null;
       },
@@ -39,6 +57,7 @@ class AppRouter {
             
             // Employee Management
             GoRoute(path: '/employees', builder: (_, __) => const EmployeesScreen()),
+            
             GoRoute(
               path: '/employees/add',
               builder: (_, state) => AddEditEmployeeScreen(employee: state.extra as Map<String, dynamic>?),
@@ -62,11 +81,16 @@ class AppRouter {
             // CRM Features
             GoRoute(path: '/attendance', builder: (_, __) => const AttendanceScreen()),
             GoRoute(path: '/reports', builder: (_, __) => const ReportsScreen()),
+            GoRoute(path: '/reports/admin', builder: (_, __) => const AdminReportsListScreen()),
             GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
+            GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingVaultScreen()),
+
+            // Staff Portal Specific Routes
+            GoRoute(path: '/staff/hub', builder: (_, __) => const StaffHubScreen()),
+            GoRoute(path: '/staff/report/add', builder: (_, __) => const SubmitReportScreen()),
           ],
         ),
       ],
     );
   }
 }
-

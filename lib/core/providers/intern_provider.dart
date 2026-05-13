@@ -12,6 +12,7 @@ class InternProvider extends ChangeNotifier {
   // State variables for loading indicators and error messages
   bool _isLoading = false;
   String? _errorMessage;
+  Timer? _pollingTimer;
 
   // Exposing state to the UI components
   List<Intern> get interns => _interns;
@@ -21,7 +22,31 @@ class InternProvider extends ChangeNotifier {
   // Update repository with new token
   void updateToken(String? token) {
     _repository = InternRepository(token: token);
-    if (token != null) fetchInterns();
+    if (token != null) {
+      fetchInterns();
+      _startPolling();
+    } else {
+      _stopPolling();
+      _interns = [];
+      _errorMessage = null;
+      notifyListeners();
+    }
+  }
+
+  void _startPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (_) => fetchInterns());
+  }
+
+  void _stopPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+  }
+
+  @override
+  void dispose() {
+    _stopPolling();
+    super.dispose();
   }
 
   // Method to retrieve all interns from the repository
@@ -55,8 +80,7 @@ class InternProvider extends ChangeNotifier {
   Future<Result<void, Exception>> addIntern(Intern intern) async {
     try {
       await _repository.addIntern(intern);
-      _interns.add(intern); // Update the local list
-      notifyListeners();
+      fetchInterns(); // Trigger background sync (don't await)
       return const Success(null);
     } catch (e) {
       return Failure(Exception(e.toString()));
@@ -67,12 +91,7 @@ class InternProvider extends ChangeNotifier {
   Future<Result<void, Exception>> updateIntern(Intern intern) async {
     try {
       await _repository.updateIntern(intern);
-      // Find the intern and replace with updated version
-      final index = _interns.indexWhere((i) => i.id == intern.id);
-      if (index != -1) {
-        _interns[index] = intern;
-        notifyListeners();
-      }
+      fetchInterns(); // Trigger background sync (don't await)
       return const Success(null);
     } catch (e) {
       return Failure(Exception(e.toString()));
@@ -83,9 +102,7 @@ class InternProvider extends ChangeNotifier {
   Future<Result<void, Exception>> deleteIntern(String id) async {
     try {
       await _repository.deleteIntern(id);
-      // Remove from memory to reflect changes in UI instantly
-      _interns.removeWhere((i) => i.id == id);
-      notifyListeners();
+      fetchInterns(); // Trigger background sync (don't await)
       return const Success(null);
     } catch (e) {
       return Failure(Exception(e.toString()));

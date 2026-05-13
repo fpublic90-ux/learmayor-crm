@@ -1,32 +1,36 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:learnyor_hrm/core/config/api_config.dart';
+import 'package:learnyor_hrm/core/providers/auth_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
 import '../../core/models/attendance.dart';
 import '../../core/providers/employee_provider.dart';
 import '../../core/providers/intern_provider.dart';
 import '../../core/providers/attendance_provider.dart';
-import '../../core/providers/company_provider.dart';
+import '../../core/providers/report_provider.dart';
 import '../../app/theme.dart';
 import '../../core/widgets/premium_widgets.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:go_router/go_router.dart';
+import 'package:flutter/services.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
+    if (hour < 12) return 'GOOD MORNING';
+    if (hour < 17) return 'GOOD AFTERNOON';
+    return 'GOOD EVENING';
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final employeeProvider = context.watch<EmployeeProvider>();
     final internProvider = context.watch<InternProvider>();
     final attendanceProvider = context.watch<AttendanceProvider>();
-    final company = context.watch<CompanyProvider>();
+    final auth = context.watch<AuthProvider>();
 
     final employeeCount = employeeProvider.employees.length;
     final internCount = internProvider.interns.length;
@@ -37,339 +41,333 @@ class DashboardScreen extends StatelessWidget {
         .length;
 
     final attendancePercent = totalStaff > 0 ? todayAttendance / totalStaff : 0.0;
-
-    final recentActivity = [
-      ...employeeProvider.employees.map((e) => {'name': e.name, 'role': e.designation, 'type': 'Employee', 'date': e.joiningDate}),
-      ...internProvider.interns.map((i) => {'name': i.name, 'role': 'Intern - ${i.college}', 'type': 'Intern', 'date': i.joiningDate}),
-    ];
-    recentActivity.sort((a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
-    final displayActivity = recentActivity.take(8).toList();
     final isLoading = employeeProvider.isLoading || internProvider.isLoading || attendanceProvider.isLoading;
+    final allUsers = auth.allUsers;
+
+    // Precision Filtering: Find users who are registered but not yet onboarded
+    final onboardedEmails = {
+      ...employeeProvider.employees.map((e) => e.email.toLowerCase().trim()),
+      ...internProvider.interns.map((i) => i.email.toLowerCase().trim()),
+    };
+    
+    final pendingUsers = allUsers.where((u) {
+      final email = u['email']?.toString().toLowerCase().trim();
+      // 1. Must have a valid email
+      if (email == null || email.isEmpty || email == 'null') return false;
+      // 2. Must NOT be the current logged-in user
+      if (email == auth.userEmail?.toLowerCase().trim()) return false;
+      // 3. Must NOT be already onboarded
+      if (onboardedEmails.contains(email)) return false;
+      // 4. Must be a staff role (employee or intern)
+      final role = u['role']?.toString().toLowerCase();
+      return role == 'employee' || role == 'intern';
+    }).toList();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isDesktop = constraints.maxWidth > 900;
-          
-          return SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(vertical: 40),
-            child: ResponsiveWrapper(
-              maxWidth: 1400,
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: isDesktop ? 40 : 20),
-                child: AnimationLimiter(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: AnimationConfiguration.toStaggeredList(
-                      duration: const Duration(milliseconds: 600),
-                      childAnimationBuilder: (widget) => SlideAnimation(
-                        verticalOffset: 20.0,
-                        child: FadeInAnimation(child: widget),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          debugPrint('🔄 [ACTION] Manual Refresh Triggered');
+          await Future.wait<void>([
+            context.read<AuthProvider>().fetchAllUsers(),
+            context.read<EmployeeProvider>().fetchEmployees(),
+            context.read<InternProvider>().fetchInterns(),
+            context.read<ReportProvider>().fetchReports(),
+            context.read<AttendanceProvider>().fetchAttendance(),
+          ]);
+        },
+        color: AppTheme.primary,
+        backgroundColor: Colors.white,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                AppTheme.primarySubtle.withOpacity(0.3),
+                AppTheme.background,
+              ],
+            ),
+          ),
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              _buildAppBar(context, auth, theme),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: isLoading 
+                    ? _buildSkeleton()
+                    : AnimationLimiter(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: AnimationConfiguration.toStaggeredList(
+                            duration: const Duration(milliseconds: 800),
+                            childAnimationBuilder: (widget) => SlideAnimation(
+                              verticalOffset: 40.0,
+                              child: FadeInAnimation(child: widget),
+                            ),
+                            children: [
+                              const SizedBox(height: 12),
+                              if (pendingUsers.isNotEmpty) ...[
+                                _buildRegistrationAlert(context, pendingUsers.length, theme),
+                                const SizedBox(height: 24),
+                              ],
+                              _buildAttendanceHero(context, attendancePercent, todayAttendance, totalStaff, theme),
+                              const SizedBox(height: 24),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _ExecutiveStatCard(
+                                      title: 'STAFF MEMBERS',
+                                      value: employeeCount.toString(),
+                                      icon: Icons.people_rounded,
+                                      color: AppTheme.primary,
+                                      onTap: () => context.push('/employees'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _ExecutiveStatCard(
+                                      title: 'INTERNS',
+                                      value: internCount.toString(),
+                                      icon: Icons.school_rounded,
+                                      color: AppTheme.accent,
+                                      onTap: () => context.push('/interns'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 32),
+                              _buildQuickActionSection(context, theme),
+                              const SizedBox(height: 100),
+                            ],
+                          ),
+                        ),
                       ),
-                      children: [
-                        _buildHeader(context, company, isDesktop),
-                        const SizedBox(height: 40),
-                        
-                        // Summary Cards Row
-                        _buildSummarySection(attendancePercent, todayAttendance, totalStaff, employeeCount, internCount, isDesktop),
-                        const SizedBox(height: 32),
-                        
-                        // Recent Joinings
-                        _RecentActivityCard(displayActivity: displayActivity, isLoading: isLoading),
-                        
-                        const SizedBox(height: 60),
-                      ],
-                    ),
-                  ),
                 ),
               ),
-            ),
-          );
-        },
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context, CompanyProvider company, bool isDesktop) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${_getGreeting()},',
-              style: const TextStyle(color: AppTheme.textMid, fontSize: 18, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              company.name ?? 'Learnyor CRM',
-              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppTheme.textDark, letterSpacing: -1),
-            ),
-          ],
-        ),
-        if (isDesktop)
+  Widget _buildRegistrationAlert(BuildContext context, int count, ThemeData theme) {
+    return BentoCard(
+      isKinetic: true,
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: AppTheme.softShadow,
-              border: Border.all(color: AppTheme.border),
-            ),
-            child: Row(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: AppTheme.warning.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+            child: const Icon(Icons.person_add_rounded, color: AppTheme.warning, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.calendar_today_rounded, size: 18, color: AppTheme.primary),
-                const SizedBox(width: 12),
+                Text('PENDING ONBOARDING', style: theme.textTheme.labelLarge?.copyWith(color: AppTheme.warning, letterSpacing: 1)),
+                Text('$count new sign-ups detected', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => context.push('/onboarding'), 
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.warning,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('VIEW', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppBar(BuildContext context, AuthProvider auth, ThemeData theme) {
+    return SliverAppBar(
+      expandedHeight: 160,
+      pinned: true,
+      stretch: true,
+      backgroundColor: AppTheme.background.withValues(alpha: 0.8),
+      elevation: 0,
+      flexibleSpace: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: FlexibleSpaceBar(
+            stretchModes: const [StretchMode.zoomBackground],
+            titlePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            centerTitle: false,
+            title: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  DateFormat('EEEE, d MMMM yyyy').format(DateTime.now()),
-                  style: const TextStyle(color: AppTheme.textDark, fontWeight: FontWeight.bold, fontSize: 14),
+                  _getGreeting(),
+                  style: theme.textTheme.labelLarge,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  auth.userName?.split(' ')[0] ?? 'Admin',
+                  style: theme.textTheme.displaySmall?.copyWith(fontSize: 22),
                 ),
               ],
             ),
           ),
+        ),
+      ),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 20, top: 8, bottom: 8),
+          child: GestureDetector(
+            onTap: () => context.push('/settings'),
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: AppTheme.accent.withValues(alpha: 0.1), width: 1.5),
+                boxShadow: AppTheme.softShadow,
+              ),
+              child: PremiumImage(
+                imageUrl: ApiConfig.getFullImageUrl(auth.profilePicUrl),
+                size: 42,
+                isCircle: true,
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
+ }
 
-  Widget _buildSummarySection(double percent, int present, int total, int emps, int interns, bool isDesktop) {
-    if (isDesktop) {
-      return Row(
+  Widget _buildAttendanceHero(BuildContext context, double percent, int present, int total, ThemeData theme) {
+    return BentoCard(
+      isKinetic: true,
+      onTap: () => context.push('/attendance'),
+      padding: const EdgeInsets.all(28),
+      child: Row(
         children: [
-          Expanded(child: _ProgressCard(label: "Today's Presence", percent: percent, count: "$present / $total")),
-          const SizedBox(width: 24),
-          Expanded(child: _DashboardStatCard(title: 'Total Employees', value: emps.toString(), icon: Icons.people_alt_rounded, color: AppTheme.primary, onTap: () {})),
-          const SizedBox(width: 24),
-          Expanded(child: _DashboardStatCard(title: 'Active Interns', value: interns.toString(), icon: Icons.school_rounded, color: Colors.indigo, onTap: () {})),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 8, height: 8,
+                      decoration: const BoxDecoration(color: AppTheme.success, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 8),
+                    Text('LIVE STATUS', style: theme.textTheme.labelLarge?.copyWith(color: AppTheme.success)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text('Daily Presence', style: theme.textTheme.headlineMedium),
+                Text('Real-time tracking active', style: theme.textTheme.bodyMedium?.copyWith(color: AppTheme.textLight)),
+                const SizedBox(height: 28),
+                Row(
+                  children: [
+                    _buildMiniBadge(Icons.check_circle_rounded, '$present Active', AppTheme.success),
+                    const SizedBox(width: 12),
+                    _buildMiniBadge(Icons.group_rounded, '$total Total', AppTheme.accent),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              const SizedBox(width: 90, height: 90, child: CircularProgressIndicator(value: 1.0, strokeWidth: 10, valueColor: AlwaysStoppedAnimation(AppTheme.divider))),
+              SizedBox(
+                width: 90, height: 90,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: percent),
+                  duration: const Duration(milliseconds: 2000),
+                  curve: Curves.elasticOut,
+                  builder: (context, value, _) => CircularProgressIndicator(value: value, strokeWidth: 10, strokeCap: StrokeCap.round, valueColor: const AlwaysStoppedAnimation(AppTheme.accent)),
+                ),
+              ),
+              Text('${(percent * 100).toInt()}%', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+            ],
+          ),
         ],
-      );
-    }
+      ),
+    );
+  }
+
+  Widget _buildMiniBadge(IconData i, String t, Color c) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(color: c.withOpacity(0.06), borderRadius: BorderRadius.circular(12), border: Border.all(color: c.withOpacity(0.1))),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(i, size: 14, color: c), const SizedBox(width: 6), Text(t, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: c))]),
+    );
+  }
+
+  Widget _buildQuickActionSection(BuildContext context, ThemeData theme) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _ProgressCard(label: "Today's Presence", percent: percent, count: "$present / $total"),
-        const SizedBox(height: 20),
+        Text('QUICK ACTIONS', style: theme.textTheme.labelLarge),
+        const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(child: _DashboardStatCard(title: 'Employees', value: emps.toString(), icon: Icons.people_alt_rounded, color: AppTheme.primary, onTap: () {})),
+            Expanded(child: _buildActionTile(context, 'Hire Staff', Icons.person_add_rounded, AppTheme.primary, () => context.push('/employees/add'), theme)),
             const SizedBox(width: 16),
-            Expanded(child: _DashboardStatCard(title: 'Interns', value: interns.toString(), icon: Icons.school_rounded, color: Colors.indigo, onTap: () {})),
+            Expanded(child: _buildActionTile(context, 'Onboard Intern', Icons.school_rounded, AppTheme.accent, () => context.push('/interns/add'), theme)),
           ],
         ),
       ],
     );
   }
-}
 
-class _DashboardStatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
+  Widget _buildActionTile(BuildContext context, String t, IconData i, Color c, VoidCallback onTap, ThemeData theme) {
+    return BentoCard(
+      isKinetic: true,
+      onTap: () { HapticFeedback.mediumImpact(); onTap(); },
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+      child: Column(
+        children: [
+          Icon(i, color: c, size: 28),
+          const SizedBox(height: 12),
+          Text(t, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: AppTheme.textDark)),
+        ],
+      ),
+    );
+  }
 
-  const _DashboardStatCard({required this.title, required this.value, required this.icon, required this.color, required this.onTap});
+  Widget _buildSkeleton() {
+    return const Column(children: [SizedBox(height: 20), ShimmerLoading(width: double.infinity, height: 180, borderRadius: 28), SizedBox(height: 24), Row(children: [Expanded(child: ShimmerLoading(width: double.infinity, height: 150, borderRadius: 28)), SizedBox(width: 16), Expanded(child: ShimmerLoading(width: double.infinity, height: 150, borderRadius: 28))])]);
+  }
 
+
+class _ExecutiveStatCard extends StatelessWidget {
+  final String title, value; final IconData icon; final Color color; final VoidCallback onTap;
+  const _ExecutiveStatCard({required this.title, required this.value, required this.icon, required this.color, required this.onTap});
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return BentoCard(
-      onTap: onTap,
+      isKinetic: true,
+      onTap: () { HapticFeedback.selectionClick(); onTap(); },
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                child: Icon(icon, color: color, size: 24),
-              ),
-              const Icon(Icons.trending_up_rounded, color: Colors.teal, size: 20),
-            ],
-          ),
-          const SizedBox(height: 32),
-          Text(value, style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: AppTheme.textDark, letterSpacing: -1)),
-          Text(title, style: const TextStyle(fontSize: 14, color: AppTheme.textMid, fontWeight: FontWeight.w500)),
+          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(16)), child: Icon(icon, color: color, size: 24)),
+          const SizedBox(height: 24),
+          Text(value, style: theme.textTheme.displayMedium),
+          const SizedBox(height: 4),
+          Text(title, style: theme.textTheme.labelLarge),
         ],
       ),
     );
   }
 }
-
-class _ProgressCard extends StatelessWidget {
-  final String label;
-  final double percent;
-  final String count;
-
-  const _ProgressCard({required this.label, required this.percent, required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppTheme.primary, AppTheme.primary.withOpacity(0.8)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: [BoxShadow(color: AppTheme.primary.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-                child: Text(count, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          TweenAnimationBuilder<double>(
-            tween: Tween<double>(begin: 0, end: percent),
-            duration: const Duration(milliseconds: 1500),
-            curve: Curves.elasticOut,
-            builder: (context, value, child) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Stack(
-                    children: [
-                      Container(
-                        height: 12,
-                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-                      ),
-                      FractionallySizedBox(
-                        widthFactor: value.clamp(0.0, 1.0),
-                        child: Container(
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(6),
-                            boxShadow: [BoxShadow(color: Colors.white.withOpacity(0.4), blurRadius: 10)],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    '${(value * 100).toInt()}% marked for today',
-                    style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.8), fontWeight: FontWeight.w500),
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RecentActivityCard extends StatelessWidget {
-  final List<Map<String, dynamic>> displayActivity;
-  final bool isLoading;
-
-  const _RecentActivityCard({required this.displayActivity, required this.isLoading});
-
-  @override
-  Widget build(BuildContext context) {
-    return BentoCard(
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(28, 28, 28, 20),
-            child: Text('Recent Joinings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.textDark)),
-          ),
-          if (isLoading)
-            _buildActivityShimmer()
-          else if (displayActivity.isEmpty)
-            const Padding(padding: EdgeInsets.symmetric(vertical: 60), child: Center(child: Text('No activity yet', style: TextStyle(color: AppTheme.textLight))))
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              padding: const EdgeInsets.only(bottom: 20),
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: displayActivity.length,
-              separatorBuilder: (context, index) => const Divider(color: AppTheme.divider, height: 1, indent: 92),
-              itemBuilder: (context, index) {
-                final activity = displayActivity[index];
-                return _ActivityTile(name: activity['name'] as String, sub: activity['role'] as String, type: activity['type'] as String);
-              },
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActivityShimmer() {
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: 5,
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      itemBuilder: (context, index) => const ListTile(
-        leading: ShimmerLoading(width: 48, height: 48, borderRadius: 24),
-        title: ShimmerLoading(width: 150, height: 16),
-        subtitle: Padding(padding: EdgeInsets.only(top: 8), child: ShimmerLoading(width: 100, height: 12)),
-      ),
-    );
-  }
-}
-
-class _ActivityTile extends StatelessWidget {
-  final String name;
-  final String sub;
-  final String type;
-
-  const _ActivityTile({required this.name, required this.sub, required this.type});
-
-  @override
-  Widget build(BuildContext context) {
-    final isIntern = type == 'Intern';
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: BentoCard(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        borderRadius: 16,
-        onTap: () {}, // Make it interactive
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: (isIntern ? Colors.indigo : AppTheme.primary).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(isIntern ? Icons.school_rounded : Icons.person_rounded, size: 24, color: isIntern ? Colors.indigo : AppTheme.primary),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppTheme.textDark)),
-                  Text(sub, style: const TextStyle(fontSize: 12, color: AppTheme.textMid)),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.border),
-          ],
-        ),
-      ),
-    );
-  }
-}
-

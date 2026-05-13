@@ -49,7 +49,7 @@ class Employee {
 
   // Factory constructor to create an Employee object from a Map (e.g., from a database)
   factory Employee.fromMap(Map<String, dynamic> map) => Employee(
-        id: map['id'],
+        id: (map['id'] ?? map['_id'] ?? '').toString(),
         name: map['name'] ?? '',
         email: map['email'] ?? '',
         phone: map['phone'] ?? '',

@@ -12,6 +12,7 @@ class EmployeeProvider extends ChangeNotifier {
   // Loading state and error handling
   bool _isLoading = false;
   String? _errorMessage;
+  Timer? _pollingTimer;
 
   // Exposing properties to the UI
   List<Employee> get employees => _employees;
@@ -21,7 +22,31 @@ class EmployeeProvider extends ChangeNotifier {
   // Update repository with new token
   void updateToken(String? token) {
     _repository = EmployeeRepository(token: token);
-    if (token != null) fetchEmployees();
+    if (token != null) {
+      fetchEmployees();
+      _startPolling();
+    } else {
+      _stopPolling();
+      _employees = [];
+      _errorMessage = null;
+      notifyListeners();
+    }
+  }
+
+  void _startPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (_) => fetchEmployees());
+  }
+
+  void _stopPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+  }
+
+  @override
+  void dispose() {
+    _stopPolling();
+    super.dispose();
   }
 
   // Fetches all employees and updates the local list
@@ -55,8 +80,7 @@ class EmployeeProvider extends ChangeNotifier {
   Future<Result<void, Exception>> addEmployee(Employee employee) async {
     try {
       await _repository.addEmployee(employee);
-      _employees.add(employee); // Sync local list
-      notifyListeners();
+      fetchEmployees(); // Trigger background sync (don't await)
       return const Success(null);
     } catch (e) {
       return Failure(Exception(e.toString()));
@@ -67,12 +91,7 @@ class EmployeeProvider extends ChangeNotifier {
   Future<Result<void, Exception>> updateEmployee(Employee employee) async {
     try {
       await _repository.updateEmployee(employee);
-      // Find the employee in the local list and replace them with updated data
-      final index = _employees.indexWhere((e) => e.id == employee.id);
-      if (index != -1) {
-        _employees[index] = employee;
-        notifyListeners();
-      }
+      fetchEmployees(); // Trigger background sync (don't await)
       return const Success(null);
     } catch (e) {
       return Failure(Exception(e.toString()));
@@ -83,9 +102,7 @@ class EmployeeProvider extends ChangeNotifier {
   Future<Result<void, Exception>> deleteEmployee(String id) async {
     try {
       await _repository.deleteEmployee(id);
-      // Remove from the local list to update UI immediately
-      _employees.removeWhere((e) => e.id == id);
-      notifyListeners();
+      fetchEmployees(); // Trigger background sync (don't await)
       return const Success(null);
     } catch (e) {
       return Failure(Exception(e.toString()));

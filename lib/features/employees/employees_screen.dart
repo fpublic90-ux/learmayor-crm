@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -6,7 +7,6 @@ import '../../core/providers/employee_provider.dart';
 import '../../core/models/employee.dart';
 import '../../core/config/api_config.dart';
 import '../../app/theme.dart';
-import '../../core/widgets/empty_state_widget.dart';
 import '../../core/widgets/premium_widgets.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 
@@ -26,227 +26,211 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
   bool _isAscending = true;
 
   @override
+  void initState() {
+    super.initState();
+    debugPrint('👥 [INIT] EmployeesScreen');
+  }
+
+  @override
+  void dispose() {
+    debugPrint('👥 [DISPOSE] EmployeesScreen');
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    debugPrint('👥 [BUILD] EmployeesScreen');
+    final theme = Theme.of(context);
     final provider = context.watch<EmployeeProvider>();
     final allEmployees = provider.employees;
-    
-    final departments = [
-      'All', 
-      ...allEmployees
-          .map((e) => e.department)
-          .where((dept) => dept.isNotEmpty)
-          .toSet()
-    ];
-    
-    var filteredEmployees = allEmployees.where((emp) {
-      final matchesSearch = emp.name.toLowerCase().contains(_searchQuery.toLowerCase()) || 
-                           emp.designation.toLowerCase().contains(_searchQuery.toLowerCase());
-      final matchesDept = _selectedDepartment == 'All' || emp.department == _selectedDepartment;
+
+    // Efficiently extract departments only if needed
+    final Set<String> deptSet = {'All'};
+    for (var e in allEmployees) {
+      if (e.department.isNotEmpty) deptSet.add(e.department);
+    }
+    final departments = deptSet.toList();
+
+    // Combined Filter & Sort logic
+    final filteredEmployees = allEmployees.where((emp) {
+      final matchesSearch = _searchQuery.isEmpty ||
+          emp.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          emp.designation.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchesDept =
+          _selectedDepartment == 'All' || emp.department == _selectedDepartment;
       return matchesSearch && matchesDept;
     }).toList();
 
-    filteredEmployees.sort((a, b) {
-      int comparison = 0;
-      switch (_sortType) {
-        case EmployeeSortType.name:
-          comparison = a.name.compareTo(b.name);
-          break;
-        case EmployeeSortType.designation:
-          comparison = a.designation.compareTo(b.designation);
-          break;
-        case EmployeeSortType.salary:
-          comparison = a.salary.compareTo(b.salary);
-          break;
-      }
-      return _isAscending ? comparison : -comparison;
-    });
+    if (filteredEmployees.length > 1) {
+      filteredEmployees.sort((a, b) {
+        int comparison = 0;
+        switch (_sortType) {
+          case EmployeeSortType.name:
+            comparison = a.name.compareTo(b.name);
+            break;
+          case EmployeeSortType.designation:
+            comparison = a.designation.compareTo(b.designation);
+            break;
+          case EmployeeSortType.salary:
+            comparison = a.salary.compareTo(b.salary);
+            break;
+        }  
+        return _isAscending ? comparison : -comparison;
+      });
+    }
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: Column(
-        children: [
-          _buildHeader(departments),
-          Expanded(
-            child: provider.isLoading 
-              ? _buildShimmerList()
-              : RefreshIndicator(
-                  onRefresh: () => provider.fetchEmployees(),
-                  color: AppTheme.accent,
-                  child: filteredEmployees.isEmpty
-                      ? const Center(
-                          child: EmptyStateWidget(
-                            title: 'No Employees Found',
-                            message: 'Try a different search term or add a new employee.',
-                            icon: Icons.people_outline_rounded,
-                          ),
-                        )
-                      : ResponsiveWrapper(
-                          child: AnimationLimiter(
-                            child: ListView.builder(
-                              padding: const EdgeInsets.fromLTRB(24, 8, 24, 100),
-                              physics: const AlwaysScrollableScrollPhysics(),
-                              itemCount: filteredEmployees.length,
-                              itemBuilder: (context, index) {
-                                return AnimationConfiguration.staggeredList(
-                                  position: index,
-                                  duration: const Duration(milliseconds: 500),
-                                  child: SlideAnimation(
-                                    verticalOffset: 20.0,
-                                    child: FadeInAnimation(
-                                      child: _buildEmployeeCard(context, filteredEmployees[index]),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
+        backgroundColor: AppTheme.background,
+        body: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) => [
+            SliverAppBar(
+              centerTitle: false,
+              expandedHeight: 120,
+              pinned: true,
+              stretch: true,
+              backgroundColor: AppTheme.background.withValues(alpha: 0.8),
+              elevation: 0,
+              actions: [
+                IconButton(
+                  onPressed: _showSortDialog,
+                  icon: const Icon(Icons.tune_rounded, color: AppTheme.primary),
                 ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/employees/add'),
-        icon: const Icon(Icons.add_rounded, size: 24),
-        label: const Text('Add Employee'),
-        backgroundColor: AppTheme.accent,
-        foregroundColor: Colors.white,
-      ),
-    );
-  }
-
-  Widget _buildHeader(List<String> departments) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
-    
-    return Container(
-      padding: EdgeInsets.fromLTRB(24, isMobile ? 16 : 40, 24, isMobile ? 16 : 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: AppTheme.border.withOpacity(0.5))),
-      ),
-      child: ResponsiveWrapper(
-        alignment: Alignment.centerLeft,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
+                const SizedBox(width: 8),
+              ],
+              flexibleSpace: FlexibleSpaceBar(
+                stretchModes: const [StretchMode.zoomBackground],
+                titlePadding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                centerTitle: true,
+                title: Text(
+                  'Staff Directory',style: TextStyle(fontSize: 20)
+                 
+                ),
+              ),
+            ),
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _SliverSearchDelegate(
+                child: Container(
+                  color: AppTheme.background,
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Employees', 
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontSize: isMobile ? 24 : null,
-                          fontWeight: FontWeight.bold,
+                      TextField(
+                        onChanged: (v) => setState(() => _searchQuery = v),
+                        decoration: const InputDecoration(
+                          hintText: 'Search staff...',
+                          prefixIcon: Icon(Icons.search_rounded),
+                          contentPadding: EdgeInsets.symmetric(vertical: 0),
+                        ).applyDefaults(theme.inputDecorationTheme),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 38,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          children: departments
+                              .map((dept) => _buildDeptChip(dept, theme))
+                              .toList(),
                         ),
                       ),
-                      if (!isMobile) ...[
-                        const SizedBox(height: 4),
-                        Text('Manage your team and their roles', style: Theme.of(context).textTheme.bodyMedium),
-                      ],
                     ],
                   ),
                 ),
-                IconButton(
-                  onPressed: _showSortDialog,
-                  icon: const Icon(Icons.tune_rounded),
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppTheme.background,
-                    padding: const EdgeInsets.all(12),
-                  ),
-                  tooltip: 'Sort Employees',
-                ),
-              ],
-            ),
-            SizedBox(height: isMobile ? 16 : 32),
-            if (isMobile) 
-              Column(
-                children: [
-                  TextField(
-                    onChanged: (v) => setState(() => _searchQuery = v),
-                    decoration: InputDecoration(
-                      hintText: 'Search employees...',
-                      prefixIcon: const Icon(Icons.search_rounded),
-                      fillColor: AppTheme.background,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 40,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: departments.map((dept) => _buildDeptChip(dept)).toList(),
-                    ),
-                  ),
-                ],
-              )
-            else
-              Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: TextField(
-                      onChanged: (v) => setState(() => _searchQuery = v),
-                      decoration: InputDecoration(
-                        hintText: 'Search by name, role or department...',
-                        prefixIcon: const Icon(Icons.search_rounded),
-                        fillColor: AppTheme.background,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    flex: 2,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: departments.map((dept) => _buildDeptChip(dept)).toList(),
-                      ),
-                    ),
-                  ),
-                ],
               ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDeptChip(String dept) {
-    final isSelected = _selectedDepartment == dept;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 200),
-        scale: isSelected ? 1.05 : 1.0,
-        child: ChoiceChip(
-          label: Text(dept),
-          selected: isSelected,
-          onSelected: (v) => setState(() => _selectedDepartment = dept),
-          selectedColor: AppTheme.accent,
-          labelStyle: TextStyle(
-            color: isSelected ? Colors.white : AppTheme.textMid,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: isSelected ? AppTheme.accent : AppTheme.border,
-              width: 1,
             ),
+          ],
+          body: provider.isLoading
+              ? const SkeletonList()
+              : RefreshIndicator(
+                  onRefresh: () async {
+                    HapticFeedback.mediumImpact();
+                    await provider.fetchEmployees();
+                  },
+                  color: AppTheme.accent,
+                  child: filteredEmployees.isEmpty
+                      ? EmptyStateWidget(
+                          title: 'No Staff Found',
+                          message: 'Try a different search or department.',
+                          icon: Icons.people_outline_rounded,
+                          onAction: () => context.push('/employees/add'),
+                          actionLabel: 'Add Staff',
+                        )
+                      : AnimationLimiter(
+                          child: ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                            physics: const BouncingScrollPhysics(),
+                            itemCount: filteredEmployees.length,
+                            itemBuilder: (context, index) {
+                              return AnimationConfiguration.staggeredList(
+                                position: index,
+                                duration: const Duration(milliseconds: 600),
+                                child: SlideAnimation(
+                                  verticalOffset: 30.0,
+                                  child: FadeInAnimation(
+                                    child: _buildEmployeeCard(context,
+                                        filteredEmployees[index], theme),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                ),
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () => context.push('/employees/add'),
+          backgroundColor: AppTheme.primary,
+          elevation: 4,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          child: const Icon(Icons.add_rounded, size: 28, color: Colors.white),
+        ),
+      );
+  }
+
+  Widget _buildDeptChip(String dept, ThemeData theme) {
+    final isSelected = _selectedDepartment == dept;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _selectedDepartment = dept);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primary : AppTheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: isSelected ? AppTheme.primary : AppTheme.border),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                      color: AppTheme.primary.withValues(alpha: 0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4))
+                ]
+              : null,
+        ),
+        child: Text(
+          dept,
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: isSelected ? Colors.white : AppTheme.textMid,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0,
           ),
         ),
       ),
     );
   }
 
-  Widget _buildEmployeeCard(BuildContext context, Employee emp) {
+  Widget _buildEmployeeCard(
+      BuildContext context, Employee emp, ThemeData theme) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Slidable(
         key: ValueKey(emp.id),
         endActionPane: ActionPane(
@@ -255,15 +239,17 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
           children: [
             SlidableAction(
               onPressed: (context) => _showDeleteDialog(context, emp),
-              backgroundColor: Colors.red.shade50,
-              foregroundColor: Colors.red,
+              backgroundColor: Colors.transparent,
+              foregroundColor: AppTheme.error,
               icon: Icons.delete_outline_rounded,
-              borderRadius: BorderRadius.circular(16),
             ),
           ],
         ),
         child: BentoCard(
-          onTap: () => context.push('/employees/detail', extra: emp.id),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            context.push('/employees/detail', extra: emp.id);
+          },
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
@@ -271,54 +257,47 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                 tag: 'emp_${emp.id}',
                 child: PremiumImage(
                   imageUrl: ApiConfig.getFullImageUrl(emp.photoUrl),
-                  size: 64,
-                  isCircle: false,
-                  borderRadius: 16,
+                  size: 60,
+                  isCircle: true,
                 ),
               ),
-              const SizedBox(width: 20),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(emp.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textDark)),
-                    const SizedBox(height: 4),
-                    Text(emp.designation, style: const TextStyle(fontSize: 13, color: AppTheme.textMid)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Flexible(child: StatusBadge(label: emp.department, color: AppTheme.accent)),
-              const SizedBox(width: 12),
-              const Icon(Icons.chevron_right_rounded, color: AppTheme.textLight),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildShimmerList() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(24),
-      itemCount: 6,
-      itemBuilder: (context, index) => Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: BentoCard(
-          child: Row(
-            children: [
-              const ShimmerLoading(width: 64, height: 64, borderRadius: 16),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ShimmerLoading(width: 150, height: 18),
+                    Text(
+                      emp.name,
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    Text(
+                      emp.designation,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: AppTheme.textLight),
+                    ),
                     const SizedBox(height: 8),
-                    ShimmerLoading(width: 100, height: 14),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        emp.department.toUpperCase(),
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontSize: 9,
+                          color: AppTheme.primary,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
+              Icon(Icons.chevron_right_rounded,
+                  color: AppTheme.textLight.withValues(alpha: 0.5)),
             ],
           ),
         ),
@@ -327,23 +306,29 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
   }
 
   void _showSortDialog() {
+    final theme = Theme.of(context);
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      showDragHandle: true,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
       builder: (context) => Container(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Sort By', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Text('Sort Staff By', style: theme.textTheme.headlineSmall),
             const SizedBox(height: 24),
-            _buildSortOption('Name', EmployeeSortType.name),
-            _buildSortOption('Designation', EmployeeSortType.designation),
-            _buildSortOption('Salary', EmployeeSortType.salary),
-            const Divider(height: 40),
+            _buildSortOption('Name', EmployeeSortType.name, theme),
+            _buildSortOption(
+                'Designation', EmployeeSortType.designation, theme),
+            _buildSortOption('Salary', EmployeeSortType.salary, theme),
+            const Divider(height: 40, color: AppTheme.divider),
             SwitchListTile(
-              title: const Text('Ascending Order'),
+              title: Text('Ascending Order', style: theme.textTheme.titleSmall),
+              activeThumbColor: AppTheme.accent,
               value: _isAscending,
               onChanged: (v) {
                 setState(() => _isAscending = v);
@@ -356,15 +341,24 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     );
   }
 
-  Widget _buildSortOption(String label, EmployeeSortType type) {
+  Widget _buildSortOption(
+      String label, EmployeeSortType type, ThemeData theme) {
     final isSelected = _sortType == type;
     return ListTile(
       onTap: () {
         setState(() => _sortType = type);
         Navigator.pop(context);
       },
-      leading: Icon(isSelected ? Icons.check_circle_rounded : Icons.circle_outlined, color: isSelected ? AppTheme.accent : AppTheme.textLight),
-      title: Text(label, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        isSelected ? Icons.check_circle_rounded : Icons.circle_outlined,
+        color: isSelected ? AppTheme.accent : AppTheme.textLight,
+      ),
+      title: Text(label,
+          style: theme.textTheme.bodyLarge?.copyWith(
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: isSelected ? AppTheme.textDark : AppTheme.textMid,
+          )),
     );
   }
 
@@ -372,17 +366,35 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => PremiumConfirmationDialog(
-        title: 'Delete Employee?',
-        message: 'Are you sure you want to remove ${employee.name} from the system? This action cannot be undone.',
-        confirmLabel: 'Delete',
+        title: 'Remove Staff?',
+        message:
+            'Are you sure you want to remove ${employee.name} from the directory? This action cannot be undone.',
+        confirmLabel: 'Remove',
         confirmColor: AppTheme.error,
         icon: Icons.delete_forever_rounded,
       ),
     );
-
     if (confirmed == true && context.mounted) {
       await context.read<EmployeeProvider>().deleteEmployee(employee.id);
     }
   }
 }
 
+class _SliverSearchDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+  _SliverSearchDelegate({required this.child});
+
+  @override
+  double get minExtent => 122;
+  @override
+  double get maxExtent => 122;
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return child;
+  }
+
+  @override
+  bool shouldRebuild(_SliverSearchDelegate oldDelegate) => false;
+}

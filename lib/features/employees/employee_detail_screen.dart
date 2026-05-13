@@ -1,9 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../../core/models/employee.dart';
 import '../../core/config/api_config.dart';
 import '../../app/theme.dart';
@@ -14,7 +15,11 @@ import '../../core/widgets/premium_widgets.dart';
 
 class EmployeeDetailScreen extends StatelessWidget {
   final String employeeId;
-  const EmployeeDetailScreen({super.key, required this.employeeId});
+
+  const EmployeeDetailScreen({
+    super.key,
+    required this.employeeId,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -22,151 +27,109 @@ class EmployeeDetailScreen extends StatelessWidget {
       (e) => e.id == employeeId,
       orElse: () => Employee(id: '', name: 'Not Found', email: '', phone: '', designation: '', department: '', joiningDate: DateTime.now(), salary: 0, address: ''),
     );
-    
+
     final currencyFormat = NumberFormat.currency(symbol: '₹', decimalDigits: 0);
 
     return Scaffold(
-      backgroundColor: AppTheme.background,
-      appBar: AppBar(
-        title: const Text('Employee Profile'),
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.textDark,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_rounded),
-            onPressed: () => context.push('/employees/add', extra: employee.toMap()),
-            tooltip: 'Edit Profile',
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 120,
+            pinned: true,
+            stretch: true,
+            backgroundColor: const Color(0xFFF8FAFC).withOpacity(0.8),
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF1E293B)),
+              onPressed: () => context.pop(),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.edit_note_rounded, color: AppTheme.primary),
+                onPressed: () => context.push('/employees/add', extra: employee.toMap()),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                onPressed: () => _showDeleteDialog(context, employee),
+              ),
+              const SizedBox(width: 8),
+            ],
+            flexibleSpace: const FlexibleSpaceBar(
+              stretchModes: [StretchMode.zoomBackground],
+              titlePadding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              centerTitle: false,
+              title: Text(
+                'Staff Profile',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1E293B),
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
-            onPressed: () => _showDeleteDialog(context, employee),
-            tooltip: 'Delete Employee',
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+              child: Column(
+                children: [
+                  _buildIdentityHeader(employee),
+                  const SizedBox(height: 24),
+                  _buildQuickActions(employee),
+                  const SizedBox(height: 24),
+                  _buildEmploymentDetails(employee, currencyFormat),
+                  const SizedBox(height: 24),
+                  _buildContactDetails(employee),
+                  const SizedBox(height: 24),
+                  _AttendanceSection(personId: employee.id),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(width: 8),
         ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: ResponsiveWrapper(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              if (constraints.maxWidth > 900) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Left Column: Profile Card & Quick Actions
-                    SizedBox(
-                      width: 350,
-                      child: Column(
-                        children: [
-                          _buildProfileCard(context, employee),
-                          const SizedBox(height: 24),
-                          _buildQuickActions(employee),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 32),
-                    // Right Column: Details & Attendance
-                    Expanded(
-                      child: Column(
-                        children: [
-                          _buildEmploymentDetails(employee, currencyFormat),
-                          const SizedBox(height: 24),
-                          _AttendanceSection(personId: employee.id),
-                          const SizedBox(height: 24),
-                          _buildContactDetails(employee),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              } else {
-                // Mobile/Tablet Vertical Layout
-                return Column(
-                  children: [
-                    _buildProfileCard(context, employee),
-                    const SizedBox(height: 24),
-                    _buildQuickActions(employee),
-                    const SizedBox(height: 24),
-                    _buildEmploymentDetails(employee, currencyFormat),
-                    const SizedBox(height: 24),
-                    _AttendanceSection(personId: employee.id),
-                    const SizedBox(height: 24),
-                    _buildContactDetails(employee),
-                  ],
-                );
-              }
-            },
-          ),
-        ),
       ),
     );
   }
 
-  Widget _buildProfileCard(BuildContext context, Employee employee) {
+  Widget _buildIdentityHeader(Employee employee) {
     return BentoCard(
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+      padding: const EdgeInsets.all(24),
       child: Column(
         children: [
           Hero(
             tag: 'emp_${employee.id}',
-            child: PremiumImage(
-              imageUrl: ApiConfig.getFullImageUrl(employee.photoUrl),
-              size: 140,
-              isCircle: false,
-              borderRadius: 24,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: AppTheme.primary.withOpacity(0.1), width: 2),
+              ),
+              child: PremiumImage(
+                imageUrl: ApiConfig.getFullImageUrl(employee.photoUrl),
+                size: 100,
+                isCircle: true,
+              ),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           Text(
             employee.name,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppTheme.textDark),
-            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF1E293B), letterSpacing: -1),
           ),
-          const SizedBox(height: 8),
           Text(
             employee.designation,
-            style: const TextStyle(fontSize: 16, color: AppTheme.textMid, fontWeight: FontWeight.w500),
-            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, color: Colors.blueGrey.withOpacity(0.6), fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 24),
-          StatusBadge(label: employee.department, color: AppTheme.accent),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickActions(Employee employee) {
-    return BentoCard(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Quick Actions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _ActionButton(
-                icon: Icons.phone_rounded,
-                label: 'Call',
-                color: Colors.green,
-                onTap: () => _makeCall(employee.phone),
-              ),
-              const SizedBox(width: 12),
-              _ActionButton(
-                icon: Icons.message_rounded,
-                label: 'WhatsApp',
-                color: const Color(0xFF25D366),
-                onTap: () => _openWhatsApp(employee.phone, employee.name),
-              ),
-              const SizedBox(width: 12),
-              _ActionButton(
-                icon: Icons.email_rounded,
-                label: 'Email',
-                color: Colors.blue,
-                onTap: () => _sendEmail(employee.email),
-              ),
+              _buildSmallBadge(employee.department, AppTheme.primary),
+              const SizedBox(width: 8),
+              _buildSmallBadge('ACTIVE', Colors.green),
             ],
           ),
         ],
@@ -174,117 +137,74 @@ class EmployeeDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEmploymentDetails(Employee employee, NumberFormat format) {
-    return _InfoSection(
+  Widget _buildSmallBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(20)),
+      child: Text(text.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: color, letterSpacing: 0.5)),
+    );
+  }
+
+  Widget _buildQuickActions(Employee employee) {
+    return Row(
+      children: [
+        _CircleAction(icon: Icons.phone_rounded, color: Colors.green, onTap: () => _makeCall(employee.phone)),
+        _CircleAction(icon: Icons.message_rounded, color: const Color(0xFF25D366), onTap: () => _openWhatsApp(employee.phone, employee.name)),
+        _CircleAction(icon: Icons.alternate_email_rounded, color: Colors.blue, onTap: () => _sendEmail(employee.email)),
+      ],
+    );
+  }
+
+  Widget _buildEmploymentDetails(Employee employee, NumberFormat f) {
+    return _DetailSection(
       title: 'Employment Information',
       children: [
-        Row(
-          children: [
-            Expanded(child: DetailTile(icon: Icons.business_center_rounded, label: 'Department', value: employee.department)),
-            Expanded(child: DetailTile(icon: Icons.calendar_today_rounded, label: 'Joining Date', value: DateFormat('MMM dd, yyyy').format(employee.joiningDate))),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(child: DetailTile(icon: Icons.payments_rounded, label: 'Salary', value: format.format(employee.salary))),
-            Expanded(child: DetailTile(icon: Icons.badge_rounded, label: 'Role', value: employee.designation)),
-          ],
-        ),
+        _DetailRow(icon: Icons.business_center_rounded, label: 'Department', value: employee.department),
+        _DetailRow(icon: Icons.event_note_rounded, label: 'Joined On', value: DateFormat('MMM dd, yyyy').format(employee.joiningDate)),
+        _DetailRow(icon: Icons.wallet_rounded, label: 'Salary', value: f.format(employee.salary)),
       ],
     );
   }
 
   Widget _buildContactDetails(Employee employee) {
-    return _InfoSection(
+    return _DetailSection(
       title: 'Contact Information',
       children: [
-        DetailTile(icon: Icons.email_outlined, label: 'Email Address', value: employee.email),
-        const SizedBox(height: 12),
-        DetailTile(icon: Icons.phone_android_rounded, label: 'Phone Number', value: employee.phone),
-        const SizedBox(height: 12),
-        DetailTile(icon: Icons.location_on_outlined, label: 'Current Address', value: employee.address),
+        _DetailRow(icon: Icons.email_outlined, label: 'Email Address', value: employee.email),
+        _DetailRow(icon: Icons.phone_android_rounded, label: 'Phone Number', value: employee.phone),
+        _DetailRow(icon: Icons.location_on_outlined, label: 'Home Address', value: employee.address),
       ],
     );
   }
 
-  void _makeCall(String phone) async {
-    final Uri url = Uri.parse('tel:$phone');
-    if (await canLaunchUrl(url)) await launchUrl(url);
-  }
-
-  void _openWhatsApp(String phone, String name) async {
-    final cleanPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    final whatsappUrl = Uri.parse("https://wa.me/91$cleanPhone?text=Hello $name, this is from Learnyor HRM.");
-    if (await canLaunchUrl(whatsappUrl)) await launchUrl(whatsappUrl, mode: LaunchMode.externalApplication);
-  }
-
-  void _sendEmail(String email) async {
-    final Uri url = Uri.parse('mailto:$email?subject=Regarding your Employment');
-    if (await canLaunchUrl(url)) await launchUrl(url);
+  void _makeCall(String p) async => await launchUrl(Uri.parse('tel:$p'));
+  void _sendEmail(String e) async => await launchUrl(Uri.parse('mailto:$e'));
+  void _openWhatsApp(String p, String n) async {
+    final clean = p.replaceAll(RegExp(r'[^0-9]'), '');
+    await launchUrl(Uri.parse("https://wa.me/91$clean?text=Hello $n"), mode: LaunchMode.externalApplication);
   }
 
   void _showDeleteDialog(BuildContext context, Employee employee) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => PremiumConfirmationDialog(
-        title: 'Delete Employee Profile?',
-        message: 'Are you sure you want to remove ${employee.name}? All historical data for this employee will be permanently deleted.',
-        confirmLabel: 'Delete Permanently',
-        confirmColor: AppTheme.error,
-        icon: Icons.delete_sweep_rounded,
+        title: 'Delete Profile?',
+        message: 'Are you sure you want to remove ${employee.name}?',
+        confirmLabel: 'Delete',
+        confirmColor: Colors.redAccent,
+        icon: Icons.person_remove_rounded,
       ),
     );
-
     if (confirmed == true && context.mounted) {
-      final result = await context.read<EmployeeProvider>().deleteEmployee(employee.id);
-      if (context.mounted) {
-        context.pop(); // Back to list
-      }
+      await context.read<EmployeeProvider>().deleteEmployee(employee.id);
+      if (context.mounted) context.pop();
     }
   }
 }
 
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ActionButton({required this.icon, required this.label, required this.color, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(0.1)),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: color, size: 24),
-              const SizedBox(height: 8),
-              Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _InfoSection extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
-
-  const _InfoSection({required this.title, required this.children});
-
+class _DetailSection extends StatelessWidget {
+  final String title; final List<Widget> children;
+  const _DetailSection({required this.title, required this.children});
   @override
   Widget build(BuildContext context) {
     return BentoCard(
@@ -292,10 +212,55 @@ class _InfoSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 24),
+          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
+          const SizedBox(height: 20),
           ...children,
         ],
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final IconData icon; final String label, value;
+  const _DetailRow({required this.icon, required this.label, required this.value});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Row(
+        children: [
+          Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: Colors.blueGrey, size: 18)),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.blueGrey.withOpacity(0.6), letterSpacing: 0.5)),
+                Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF1E293B))),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CircleAction extends StatelessWidget {
+  final IconData icon; final Color color; final VoidCallback onTap;
+  const _CircleAction({required this.icon, required this.color, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () { HapticFeedback.lightImpact(); onTap(); },
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.1))),
+          child: Icon(icon, color: color, size: 24),
+        ),
       ),
     );
   }
@@ -307,83 +272,43 @@ class _AttendanceSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final attendanceProvider = context.watch<AttendanceProvider>();
-    final records = attendanceProvider.getAttendanceForPerson(personId);
-    
-    final presentCount = records.where((r) => r.status == AttendanceStatus.present).length;
-    final halfDayCount = records.where((r) => r.status == AttendanceStatus.halfDay).length;
-    final absentCount = records.where((r) => r.status == AttendanceStatus.absent).length;
-
+    final attendance = context.watch<AttendanceProvider>().getAttendanceForPerson(personId);
     return BentoCard(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Attendance Overview', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              Text('${records.length} Records', style: const TextStyle(color: AppTheme.textMid)),
-            ],
-          ),
-          const SizedBox(height: 32),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _StatItem(label: 'Present', value: presentCount.toString(), color: Colors.green),
-              _StatItem(label: 'Half Day', value: halfDayCount.toString(), color: Colors.orange),
-              _StatItem(label: 'Absent', value: absentCount.toString(), color: Colors.red),
-            ],
-          ),
-          if (records.isNotEmpty) ...[
-            const SizedBox(height: 32),
-            const Divider(),
-            const SizedBox(height: 16),
-            ...records.take(5).map((record) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: [
-                  Text(DateFormat('MMM dd, yyyy').format(record.date), style: const TextStyle(fontWeight: FontWeight.w500)),
-                  const Spacer(),
-                  StatusBadge(
-                    label: record.status.name.toUpperCase(),
-                    color: _getStatusColor(record.status),
-                  ),
-                ],
-              ),
-            )),
-          ],
+          const Text('Attendance History', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1E293B))),
+          const SizedBox(height: 20),
+          if (attendance.isEmpty)
+            const Center(child: Padding(padding: EdgeInsets.symmetric(vertical: 20), child: Text('No attendance records yet', style: TextStyle(color: Colors.blueGrey))))
+          else
+            Column(
+              children: attendance.take(5).map((a) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(DateFormat('MMM dd, yyyy').format(a.date), style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
+                    _buildStatusTag(a.status),
+                  ],
+                ),
+              )).toList(),
+            ),
         ],
       ),
     );
   }
 
-  Color _getStatusColor(AttendanceStatus status) {
-    switch (status) {
-      case AttendanceStatus.present: return Colors.green;
-      case AttendanceStatus.absent: return Colors.red;
-      case AttendanceStatus.halfDay: return Colors.orange;
-      case AttendanceStatus.leave: return Colors.blue;
-    }
-  }
-}
-
-class _StatItem extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-
-  const _StatItem({required this.label, required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(value, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: color)),
-        const SizedBox(height: 4),
-        Text(label, style: const TextStyle(fontSize: 12, color: AppTheme.textMid, fontWeight: FontWeight.w600)),
-      ],
+  Widget _buildStatusTag(AttendanceStatus status) {
+    Color color = Colors.grey;
+    if (status == AttendanceStatus.present) color = Colors.green;
+    if (status == AttendanceStatus.absent) color = Colors.red;
+    if (status == AttendanceStatus.halfDay) color = Colors.orange;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+      child: Text(status.name.toUpperCase(), style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800)),
     );
   }
 }
-

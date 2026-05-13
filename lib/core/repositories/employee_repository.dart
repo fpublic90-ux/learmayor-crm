@@ -15,12 +15,17 @@ class EmployeeRepository {
   };
 
   Future<List<Employee>> getEmployees() async {
-    final response = await http.get(Uri.parse(ApiConfig.employeesUrl), headers: _headers);
-    if (response.statusCode == 200) {
-      final List data = jsonDecode(response.body);
-      return data.map((e) => Employee.fromMap(e)).toList();
+    try {
+      final response = await http.get(Uri.parse(ApiConfig.employeesUrl), headers: _headers)
+          .timeout(const Duration(seconds: 45));
+      if (response.statusCode == 200) {
+        final List data = jsonDecode(response.body);
+        return data.map((e) => Employee.fromMap(e)).toList();
+      }
+      throw Exception('Server error (${response.statusCode})');
+    } catch (e) {
+      throw Exception('Server is warming up or connection lost. Please try again.');
     }
-    throw Exception('Failed to load employees');
   }
 
   Future<String?> uploadImage(XFile image) async {
@@ -41,22 +46,48 @@ class EmployeeRepository {
   }
 
   Future<void> addEmployee(Employee employee) async {
-    await http.post(
+    final response = await http.post(
       Uri.parse(ApiConfig.employeesUrl),
       headers: _headers,
       body: jsonEncode(employee.toMap()),
-    );
+    ).timeout(const Duration(seconds: 45));
+    if (response.statusCode != 201 && response.statusCode != 200) {
+      throw Exception('Failed to add record (Status: ${response.statusCode})');
+    }
   }
 
   Future<void> updateEmployee(Employee employee) async {
-    await http.post(
-      Uri.parse(ApiConfig.employeesUrl),
+    final url = ApiConfig.employeesUrl; // Upsert uses the base POST endpoint
+    final body = jsonEncode(employee.toMap());
+    debugPrint('📡 [UPSERT] Employee Request: $url');
+    debugPrint('📦 Payload: $body');
+    
+    final response = await http.post(
+      Uri.parse(url),
       headers: _headers,
-      body: jsonEncode(employee.toMap()),
-    );
+      body: body,
+    ).timeout(const Duration(seconds: 15));
+    
+    debugPrint('📥 [UPSERT] Employee Response (${response.statusCode}): ${response.body}');
+    
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Update failed (Status: ${response.statusCode})');
+    }
   }
 
   Future<void> deleteEmployee(String id) async {
-    await http.delete(Uri.parse('${ApiConfig.employeesUrl}/$id'), headers: _headers);
+    final url = '${ApiConfig.employeesUrl}/$id';
+    debugPrint('📡 [DELETE] Employee Request: $url');
+    
+    final response = await http.delete(
+      Uri.parse(url), 
+      headers: _headers
+    ).timeout(const Duration(seconds: 15));
+    
+    debugPrint('📥 [DELETE] Employee Response (${response.statusCode})');
+    
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw Exception('Deletion failed (Status: ${response.statusCode})');
+    }
   }
 }

@@ -23,7 +23,7 @@ class Attendance {
         'id': id,
         'personId': personId,
         'date': DateTime(date.year, date.month, date.day).toIso8601String(),
-        'status': status.name,
+        'status': status.toString().split('.').last,
         'notes': notes,
       };
 
@@ -32,7 +32,7 @@ class Attendance {
         personId: map['personId'] ?? '',
         date: DateTime.tryParse(map['date'] ?? '') ?? DateTime.now(),
         status: AttendanceStatus.values.firstWhere(
-          (e) => e.name == map['status'],
+          (e) => e.toString().split('.').last == map['status'],
           orElse: () => AttendanceStatus.present,
         ),
         notes: map['notes'],

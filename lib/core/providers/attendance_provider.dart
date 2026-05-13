@@ -19,7 +19,13 @@ class AttendanceProvider extends ChangeNotifier {
   // Update repository with new token
   void updateToken(String? token) {
     _repository = AttendanceRepository(token: token);
-    if (token != null) fetchAttendance();
+    if (token != null) {
+      fetchAttendance();
+    } else {
+      _attendanceRecords = [];
+      _errorMessage = null;
+      notifyListeners();
+    }
   }
 
   // Method to fetch all attendance data from the repository

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:learnyor_hrm/core/providers/attendance_provider.dart';
+import 'package:learnyor_hrm/core/providers/employee_provider.dart';
+import 'package:learnyor_hrm/core/providers/intern_provider.dart';
 import 'package:learnyor_hrm/core/widgets/premium_widgets.dart';
 import 'package:provider/provider.dart';
 import 'theme.dart';
@@ -14,8 +18,8 @@ class ShellLayout extends StatefulWidget {
   State<ShellLayout> createState() => _ShellLayoutState();
 }
 
-class _ShellLayoutState extends State<ShellLayout> with SingleTickerProviderStateMixin {
-  bool _isExpanded = false;
+class _ShellLayoutState extends State<ShellLayout>
+    with SingleTickerProviderStateMixin {
   late AnimationController _entranceController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -25,7 +29,7 @@ class _ShellLayoutState extends State<ShellLayout> with SingleTickerProviderStat
     super.initState();
     _entranceController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 800),
     );
 
     _fadeAnimation = CurvedAnimation(
@@ -34,7 +38,7 @@ class _ShellLayoutState extends State<ShellLayout> with SingleTickerProviderStat
     );
 
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.05),
+      begin: const Offset(0, 0.02),
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _entranceController,
@@ -42,6 +46,20 @@ class _ShellLayoutState extends State<ShellLayout> with SingleTickerProviderStat
     ));
 
     _entranceController.forward();
+
+    // Staggered Global Data Warmup to prevent main-thread jank
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final auth = context.read<AuthProvider>();
+      if (auth.isLoggedIn) {
+        // Phase 1: Directories (Critical for UI Identity)
+        await context.read<EmployeeProvider>().fetchEmployees();
+        await context.read<InternProvider>().fetchInterns();
+        
+        // Phase 2: Analytics (Heavy Data, staggered)
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (mounted) await context.read<AttendanceProvider>().fetchAttendance();
+      }
+    });
   }
 
   @override
@@ -55,7 +73,8 @@ class _ShellLayoutState extends State<ShellLayout> with SingleTickerProviderStat
       context: context,
       builder: (context) => const PremiumConfirmationDialog(
         title: 'Sign Out?',
-        message: 'Are you sure you want to exit your professional session? You will need to sign in again to access the CRM.',
+        message:
+            'Are you sure you want to exit your professional session? You will need to sign in again to access the CRM.',
         confirmLabel: 'Sign Out',
         confirmColor: AppTheme.error,
         icon: Icons.logout_rounded,
@@ -67,198 +86,164 @@ class _ShellLayoutState extends State<ShellLayout> with SingleTickerProviderStat
     }
   }
 
+  void _syncProfileWithDirectory(BuildContext context) {
+    final auth = context.read<AuthProvider>();
+    if (auth.isAdmin || !auth.isLoggedIn) return;
+
+    final employeeProvider = context.read<EmployeeProvider>();
+    final internProvider = context.read<InternProvider>();
+    final userEmail = auth.userEmail?.toLowerCase().trim();
+
+    if (userEmail == null) return;
+
+    String? latestName;
+    try {
+      if (auth.role == UserRole.employee) {
+        latestName = employeeProvider.employees.firstWhere((e) => e.email.toLowerCase().trim() == userEmail).name;
+      } else if (auth.role == UserRole.intern) {
+        latestName = internProvider.interns.firstWhere((i) => i.email.toLowerCase().trim() == userEmail).name;
+      }
+    } catch (_) {}
+
+    if (latestName != null && latestName != auth.userName) {
+      debugPrint('🔄 Auth Sync: Updating local name to $latestName');
+      auth.refreshLocalProfile(name: latestName);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Watch providers to trigger rebuilds when directory data arrives/updates
+    context.watch<EmployeeProvider>();
+    context.watch<InternProvider>();
+    
+    // Reactive sync
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncProfileWithDirectory(context));
+    
     final size = MediaQuery.of(context).size;
     final isDesktop = size.width > 900;
 
     return Scaffold(
-      body: FadeTransition(
-        opacity: _fadeAnimation,
-        child: SlideTransition(
-          position: _slideAnimation,
-          child: Row(
+      backgroundColor: isDesktop ? const Color(0xFFF1F5F9) : AppTheme.background,
+      body: Center(
+        child: Container(
+          width: isDesktop ? 450 : double.infinity,
+          margin: isDesktop ? const EdgeInsets.symmetric(vertical: 32) : null,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: isDesktop ? [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.12),
+                blurRadius: 50,
+                offset: const Offset(0, 20),
+              )
+            ] : null,
+            borderRadius: isDesktop ? BorderRadius.circular(32) : BorderRadius.zero,
+          ),
+          clipBehavior: isDesktop ? Clip.antiAlias : Clip.none,
+          child: Column(
             children: [
-              if (isDesktop)
-                _NavigationSidebar(
-                  isExpanded: _isExpanded,
-                  onToggle: () => setState(() => _isExpanded = !_isExpanded),
-                  onLogout: () => _handleLogout(context),
-                ),
               Expanded(
-                child: Column(
-                  children: [
-                    if (!isDesktop)
-                      AppBar(
-                        title: const Text('Learnyor CRM'),
-                        leading: Builder(
-                          builder: (context) => IconButton(
-                            icon: const Icon(Icons.menu_rounded),
-                            onPressed: () => Scaffold.of(context).openDrawer(),
-                          ),
-                        ),
-                      ),
-                    Expanded(child: widget.child),
-                  ],
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: SlideTransition(
+                    position: _slideAnimation,
+                    child: widget.child,
+                  ),
                 ),
               ),
             ],
           ),
         ),
       ),
-      drawer: isDesktop ? null : _MobileDrawer(onLogout: () => _handleLogout(context)),
+      bottomNavigationBar: _buildBottomNavBar(context),
     );
   }
-}
 
-class _NavigationSidebar extends StatelessWidget {
-  final bool isExpanded;
-  final VoidCallback onToggle;
-  final VoidCallback onLogout;
+  String _getAppBarTitle(String location) {
+    if (location == '/dashboard') return 'Executive Dashboard';
+    if (location == '/staff/hub') return 'Staff Activity Hub';
+    if (location.startsWith('/employees')) return 'Staff Directory';
+    if (location.startsWith('/interns')) return 'Interns List';
+    if (location.startsWith('/attendance')) return 'Attendance';
+    if (location.startsWith('/reports')) return 'Performance Analytics';
+    if (location == '/settings') return 'Settings';
+    return 'Learnyor CRM';
+  }
 
-  const _NavigationSidebar({
-    required this.isExpanded,
-    required this.onToggle,
-    required this.onLogout,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildBottomNavBar(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      width: isExpanded ? 260 : 80,
+    // Use read to avoid shell-wide rebuilds on auth notifications
+    final auth = context.read<AuthProvider>();
+    
+    return Container(
       decoration: BoxDecoration(
-        color: AppTheme.primary,
+        color: Colors.white,
+        border: Border(top: BorderSide(color: AppTheme.border.withOpacity(0.5))),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
-            offset: const Offset(2, 0),
+            offset: const Offset(0, -5),
           ),
         ],
       ),
-      child: Column(
-        children: [
-          const SizedBox(height: 24),
-          _SidebarHeader(isExpanded: isExpanded),
-          const SizedBox(height: 32),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              children: [
-                _SidebarItem(
-                  icon: Icons.dashboard_rounded,
-                  label: 'Dashboard',
-                  isSelected: location == '/dashboard',
-                  isExpanded: isExpanded,
-                  onTap: () => context.go('/dashboard'),
-                ),
-                _SidebarItem(
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              // Home Nav (Changes based on Role)
+              _BottomNavItem(
+                icon: Icons.dashboard_rounded,
+                label: 'Home',
+                isSelected: location == '/dashboard' || location == '/staff/hub',
+                onTap: () => context.go(auth.isAdmin ? '/dashboard' : '/staff/hub'),
+              ),
+              
+              // Staff only visible to Admin
+              if (auth.isAdmin)
+                _BottomNavItem(
                   icon: Icons.people_alt_rounded,
-                  label: 'Employees',
+                  label: 'Staff',
                   isSelected: location.startsWith('/employees'),
-                  isExpanded: isExpanded,
-                  onTap: () => context.go('/employees'),
+                  onTap: () { if (location != '/employees') context.go('/employees'); },
                 ),
-                _SidebarItem(
+                
+              _BottomNavItem(
+                icon: Icons.calendar_today_rounded,
+                label: 'Attendance',
+                isSelected: location.startsWith('/attendance'),
+                onTap: () { if (location != '/attendance') context.go('/attendance'); },
+              ),
+              
+              // Interns only visible to Admin
+              if (auth.isAdmin)
+                _BottomNavItem(
                   icon: Icons.school_rounded,
                   label: 'Interns',
                   isSelected: location.startsWith('/interns'),
-                  isExpanded: isExpanded,
-                  onTap: () => context.go('/interns'),
+                  onTap: () { if (location != '/interns') context.go('/interns'); },
                 ),
-                _SidebarItem(
-                  icon: Icons.calendar_today_rounded,
-                  label: 'Attendance',
-                  isSelected: location == '/attendance',
-                  isExpanded: isExpanded,
-                  onTap: () => context.go('/attendance'),
-                ),
-                _SidebarItem(
-                  icon: Icons.bar_chart_rounded,
-                  label: 'Reports',
-                  isSelected: location == '/reports',
-                  isExpanded: isExpanded,
-                  onTap: () => context.go('/reports'),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-                  child: Divider(color: Colors.white12, height: 1),
-                ),
-                _SidebarItem(
-                  icon: Icons.settings_rounded,
-                  label: 'Settings',
-                  isSelected: location == '/settings',
-                  isExpanded: isExpanded,
-                  onTap: () => context.go('/settings'),
-                ),
-              ],
-            ),
-          ),
-          _SidebarFooter(isExpanded: isExpanded, onToggle: onToggle, onLogout: onLogout),
-        ],
-      ),
-    );
-  }
-}
+                
+              _BottomNavItem(
+                icon: Icons.analytics_rounded,
+                label: auth.isAdmin ? 'Reports' : 'Logs',
+                isSelected: location.startsWith('/reports'),
+                onTap: () { 
+                  final target = auth.isAdmin ? '/reports/admin' : '/reports';
+                  if (location != target) context.go(target); 
+                },
+              ),
 
-class _SidebarItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isSelected;
-  final bool isExpanded;
-  final VoidCallback onTap;
-  final Color? color;
-
-  const _SidebarItem({
-    required this.icon,
-    required this.label,
-    required this.isSelected,
-    required this.isExpanded,
-    required this.onTap,
-    this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            height: 48,
-            decoration: BoxDecoration(
-              color: isSelected ? AppTheme.accent : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 56,
-                  child: Icon(
-                    icon,
-                    color: color ?? (isSelected ? Colors.white : Colors.white60),
-                    size: 22,
-                  ),
-                ),
-                if (isExpanded)
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        color: color ?? (isSelected ? Colors.white : Colors.white60),
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+              _BottomNavItem(
+                icon: Icons.settings_rounded,
+                label: 'Settings',
+                isSelected: location == '/settings',
+                onTap: () { if (location != '/settings') context.go('/settings'); },
+              ),
+            ],
           ),
         ),
       ),
@@ -266,146 +251,53 @@ class _SidebarItem extends StatelessWidget {
   }
 }
 
-class _SidebarHeader extends StatelessWidget {
-  final bool isExpanded;
+class _BottomNavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
 
-  const _SidebarHeader({required this.isExpanded});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppTheme.accent,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.bolt_rounded, color: Colors.white, size: 24),
-          ),
-          if (isExpanded) ...[
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                'LEARNYOR',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                  letterSpacing: 1,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _SidebarFooter extends StatelessWidget {
-  final bool isExpanded;
-  final VoidCallback onToggle;
-  final VoidCallback onLogout;
-
-  const _SidebarFooter({
-    required this.isExpanded,
-    required this.onToggle,
-    required this.onLogout,
+  const _BottomNavItem({
+    required this.icon,
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-      child: Column(
-        children: [
-          const Divider(color: Colors.white12, height: 1),
-          const SizedBox(height: 16),
-          _SidebarItem(
-            icon: Icons.logout_rounded,
-            label: 'Logout',
-            isSelected: false,
-            isExpanded: isExpanded,
-            onTap: onLogout,
-            color: Colors.redAccent.shade100,
-          ),
-          const SizedBox(height: 8),
-          IconButton(
-            icon: Icon(
-              isExpanded ? Icons.keyboard_double_arrow_left_rounded : Icons.keyboard_double_arrow_right_rounded,
-              color: Colors.white30,
+    return InkWell(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primary.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? AppTheme.primary : AppTheme.textLight,
+              size: 20,
             ),
-            onPressed: onToggle,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MobileDrawer extends StatelessWidget {
-  final VoidCallback onLogout;
-  const _MobileDrawer({required this.onLogout});
-
-  @override
-  Widget build(BuildContext context) {
-    return Drawer(
-      child: Column(
-        children: [
-          const DrawerHeader(
-            decoration: BoxDecoration(color: AppTheme.primary),
-            child: Center(
-              child: Text(
-                'LEARNYOR CRM',
-                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? AppTheme.primary : AppTheme.textLight,
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
               ),
             ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.dashboard_rounded),
-            title: const Text('Dashboard'),
-            onTap: () => context.go('/dashboard'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.people_alt_rounded),
-            title: const Text('Employees'),
-            onTap: () => context.go('/employees'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.school_rounded),
-            title: const Text('Interns'),
-            onTap: () => context.go('/interns'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.calendar_today_rounded),
-            title: const Text('Attendance'),
-            onTap: () => context.go('/attendance'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.bar_chart_rounded),
-            title: const Text('Reports'),
-            onTap: () => context.go('/reports'),
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.settings_rounded),
-            title: const Text('Settings'),
-            onTap: () => context.go('/settings'),
-          ),
-          const Spacer(),
-          ListTile(
-            leading: const Icon(Icons.logout_rounded, color: AppTheme.error),
-            title: const Text('Logout', style: TextStyle(color: AppTheme.error, fontWeight: FontWeight.bold)),
-            onTap: () {
-              Navigator.pop(context); // Close drawer
-              onLogout();
-            },
-          ),
-          const SizedBox(height: 20),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -1,11 +1,16 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:ui';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import '../../core/config/api_config.dart';
 import 'package:provider/provider.dart';
-import '../../app/globals.dart';
+import 'package:flutter/services.dart';
+import 'package:learnyor_hrm/app/globals.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../app/theme.dart';
+import '../../core/widgets/premium_widgets.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -21,11 +26,12 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _isLogin = true;
   bool _isSuccess = false;
+  bool _isSlowConnection = false;
+  UserRole _selectedRole = UserRole.employee;
 
   @override
   void initState() {
     super.initState();
-    // Start waking up the server as soon as the user sees the login screen
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AuthProvider>().warmup();
     });
@@ -33,36 +39,34 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _login() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter email and password')),
-      );
+      Globals.showSnackBar('Please enter email and password', isError: true);
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _isSlowConnection = false;
+    });
+
     final auth = context.read<AuthProvider>();
+    Timer? slowTimer = Timer(const Duration(seconds: 6), () {
+      if (mounted && _isLoading) {
+        setState(() => _isSlowConnection = true);
+        HapticFeedback.selectionClick();
+      }
+    });
     
     try {
       if (_isLogin) {
-        await auth.login(
-          _emailController.text.trim(),
-          _passwordController.text,
-        );
-        
+        await auth.login(_emailController.text.trim(), _passwordController.text);
+        slowTimer.cancel();
         if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _isSuccess = true;
-          });
-          
-          // Show success for 1.2 seconds then enter
+          setState(() { _isLoading = false; _isSuccess = true; });
+          HapticFeedback.heavyImpact();
           await Future.delayed(const Duration(milliseconds: 1200));
-          if (mounted) {
-            auth.finishLogin();
-          }
+          if (mounted) auth.finishLogin();
         }
       } else {
-        // Simple Register Logic
         final response = await http.post(
           Uri.parse('${ApiConfig.baseUrl}/auth/register'),
           headers: {'Content-Type': 'application/json'},
@@ -70,19 +74,18 @@ class _LoginScreenState extends State<LoginScreen> {
             'email': _emailController.text.trim(),
             'password': _passwordController.text,
             'name': _nameController.text.trim(),
+            'role': _selectedRole.name,
           }),
         );
-        
+        slowTimer.cancel();
         if (response.statusCode == 201) {
           await auth.login(
-            _emailController.text.trim(),
-            _passwordController.text,
+            _emailController.text.trim(), 
+            _passwordController.text, 
+            manualRole: _selectedRole,
           );
           if (mounted) {
-            setState(() {
-              _isLoading = false;
-              _isSuccess = true;
-            });
+            setState(() { _isLoading = false; _isSuccess = true; });
             await Future.delayed(const Duration(milliseconds: 1200));
             if (mounted) auth.finishLogin();
           }
@@ -92,8 +95,10 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     } catch (e) {
+      slowTimer.cancel();
       if (mounted) {
         setState(() => _isLoading = false);
+        HapticFeedback.vibrate();
         Globals.showSnackBar(e.toString().replaceAll('Exception: ', ''), isError: true);
       }
     }
@@ -102,140 +107,52 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.secondary,
+      backgroundColor: const Color(0xFF0F172A),
       body: Stack(
         children: [
-          Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 600),
-                opacity: _isSuccess ? 0 : 1,
-                child: AnimatedScale(
-                  duration: const Duration(milliseconds: 600),
-                  scale: _isSuccess ? 0.8 : 1,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildLogo(),
-                      const SizedBox(height: 40),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 520),
-                        child: Card(
-                          elevation: 12,
-                          shadowColor: Colors.black.withOpacity(0.2),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                          child: Padding(
-                            padding: const EdgeInsets.all(32.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Admin Portal',
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        color: AppTheme.primary,
-                                        letterSpacing: 0.5,
-                                      ),
-                                ),
-                                const SizedBox(height: 32),
-                                if (!_isLogin) ...[
-                                  TextField(
-                                    controller: _nameController,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Full Name',
-                                      prefixIcon: Icon(Icons.person_outline),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                ],
-                                TextField(
-                                  controller: _emailController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Admin Email',
-                                    prefixIcon: Icon(Icons.email_outlined),
-                                  ),
-                                  keyboardType: TextInputType.emailAddress,
-                                ),
-                                const SizedBox(height: 16),
-                                TextField(
-                                  controller: _passwordController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Password',
-                                    prefixIcon: Icon(Icons.lock_outline),
-                                  ),
-                                  obscureText: true,
-                                ),
-                                const SizedBox(height: 32),
-                                
-                                // Animated Button State
-                                AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 400),
-                                  child: _buildButtonState(),
-                                ),
-                                
-                                const SizedBox(height: 8),
-                                TextButton(
-                                  onPressed: _isLoading || _isSuccess ? null : () => setState(() => _isLogin = !_isLogin),
-                                  child: Text(_isLogin ? 'New Admin? Register' : 'Already have an account? Login'),
-                                ),
-                                if (_isLogin)
-                                  TextButton(
-                                    onPressed: _isLoading || _isSuccess ? null : () {
-                                      Globals.showSnackBar('Entering Demo Mode...');
-                                      context.read<AuthProvider>().bypassLogin();
-                                    },
-                                    child: Text('Try Demo Mode', style: TextStyle(color: AppTheme.textMid.withOpacity(0.7), fontSize: 13)),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+          // IMMERSIVE BACKGROUND
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment.topRight,
+                  radius: 1.5,
+                  colors: [
+                    Color(0xFF1E293B),
+                    Color(0xFF0F172A),
+                  ],
                 ),
               ),
             ),
           ),
           
-          // Success Overlay Animation
-          if (_isSuccess)
-            Positioned.fill(
-              child: Container(
-                color: AppTheme.primary.withOpacity(0.9),
-                child: Center(
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween<double>(begin: 0, end: 1),
-                    duration: const Duration(milliseconds: 800),
-                    curve: Curves.elasticOut,
-                    builder: (context, value, child) {
-                      return Transform.scale(
-                        scale: value,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.verified_user_rounded, color: Colors.white, size: 100),
-                            const SizedBox(height: 24),
-                            const Text(
-                              'Access Granted',
-                              style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: 2),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Welcome back, ${context.read<AuthProvider>().userName ?? "Admin"}',
-                              style: const TextStyle(color: Colors.white70, fontSize: 18),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: AnimationLimiter(
+                  child: Column(
+                    children: AnimationConfiguration.toStaggeredList(
+                      duration: const Duration(milliseconds: 800),
+                      childAnimationBuilder: (widget) => SlideAnimation(
+                        verticalOffset: 50.0,
+                        child: FadeInAnimation(child: widget),
+                      ),
+                      children: [
+                        _buildLogo(),
+                        const SizedBox(height: 48),
+                        _buildLoginPanel(),
+                        const SizedBox(height: 24),
+                        _buildActions(),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
+          ),
+
+          if (_isSuccess) _buildSuccessOverlay(),
         ],
       ),
     );
@@ -244,68 +161,199 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildLogo() {
     return Column(
       children: [
-        Image.asset('assets/images/logo.png', height: 80, errorBuilder: (c, e, s) => const Icon(Icons.business_center, size: 80, color: Colors.white)),
-        const SizedBox(height: 16),
-        Text(
-          'Learnyor',
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.5,
-              ),
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: AppTheme.accent.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(color: AppTheme.accent.withValues(alpha: 0.2), blurRadius: 40, spreadRadius: -10)
+            ],
+          ),
+          child: const Icon(Icons.token_rounded, size: 54, color: AppTheme.accent),
         ),
+        const SizedBox(height: 32),
         const Text(
-          'HR & Intern Management',
-          style: TextStyle(color: Colors.white70, fontSize: 16),
+          'Learnyor CRM',
+          style: TextStyle(
+            color: Colors.white, 
+            fontSize: 34, 
+            fontWeight: FontWeight.w900, 
+            letterSpacing: -1.5,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Official Management Portal',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.5), 
+            fontSize: 14, 
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildButtonState() {
-    if (_isSuccess) {
-      return Container(
-        key: const ValueKey('success'),
-        height: 56,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: AppTheme.success,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 32),
-      );
-    }
-
-    if (_isLoading) {
-      return Column(
-        key: const ValueKey('loading'),
+  Widget _buildLoginPanel() {
+    return GlassContainer(
+      padding: const EdgeInsets.all(32),
+      blur: 20,
+      opacity: 0.08,
+      borderRadius: 40,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 16),
-          Text(
-            'Waking up server...\nThis can take up to 45 seconds',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppTheme.textMid, fontSize: 13, height: 1.5),
-          ),
+          if (!_isLogin) ...[
+            _buildField(_nameController, 'Full Name', Icons.person_outline_rounded),
+            const SizedBox(height: 20),
+            _buildRoleSelector(),
+            const SizedBox(height: 20),
+          ],
+          _buildField(_emailController, 'Enter Email', Icons.alternate_email_rounded, keyboard: TextInputType.emailAddress),
+          const SizedBox(height: 20),
+          _buildField(_passwordController, 'Enter Password', Icons.lock_outline_rounded, obscure: true),
+          const SizedBox(height: 40),
+          _buildPrimaryButton(),
         ],
-      );
-    }
+      ),
+    );
+  }
 
-    return SizedBox(
-      width: double.infinity,
-      child: Container(
-        key: const ValueKey('button'),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: AppTheme.premiumShadow,
+  Widget _buildField(TextEditingController controller, String hint, IconData icon, {bool obscure = false, TextInputType? keyboard}) {
+    return TextField(
+      controller: controller,
+      obscureText: obscure,
+      keyboardType: keyboard,
+      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+        prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.3), size: 20),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.03),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.white.withOpacity(0.05))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: AppTheme.primary)),
+      ),
+    );
+  }
+
+  Widget _buildPrimaryButton() {
+    return Container(
+      height: 58,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: AppTheme.primary.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))],
+      ),
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : _login,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppTheme.primary,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 0,
         ),
-        child: ElevatedButton(
-          onPressed: _login,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.primary,
-            padding: const EdgeInsets.symmetric(vertical: 18),
+        child: _isLoading 
+          ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+          : Text(_isLogin ? 'SIGN IN' : 'CREATE ACCOUNT', style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1)),
+      ),
+    );
+  }
+
+  Widget _buildActions() {
+    return Column(
+      children: [
+        TextButton(
+          onPressed: () => setState(() => _isLogin = !_isLogin),
+          child: Text(
+            _isLogin ? 'New Member? Register' : 'Already have an account? Login',
+            style: TextStyle(color: Colors.white.withOpacity(0.6), fontWeight: FontWeight.w600),
           ),
-          child: Text(_isLogin ? 'SIGN IN' : 'CREATE ACCOUNT'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSuccessOverlay() {
+    return Container(
+      color: const Color(0xFF0F172A),
+      child: Center(
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 1000),
+          curve: Curves.elasticOut,
+          builder: (context, value, child) {
+            return Transform.scale(
+              scale: value,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.verified_user_rounded, color: AppTheme.primary, size: 80),
+                  const SizedBox(height: 24),
+                  const Text('ACCESS GRANTED', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 2)),
+                  const SizedBox(height: 12),
+                  Text('Initializing System...', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14)),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRoleSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('I AM JOINING AS', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _RoleButton(
+              label: 'STAFF MEMBER', 
+              icon: Icons.work_rounded, 
+              isSelected: _selectedRole == UserRole.employee,
+              onTap: () => setState(() => _selectedRole = UserRole.employee),
+            ),
+            const SizedBox(width: 12),
+            _RoleButton(
+              label: 'INTERN', 
+              icon: Icons.school_rounded, 
+              isSelected: _selectedRole == UserRole.intern,
+              onTap: () => setState(() => _selectedRole = UserRole.intern),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _RoleButton extends StatelessWidget {
+  final String label; final IconData icon; final bool isSelected; final VoidCallback onTap;
+  const _RoleButton({required this.label, required this.icon, required this.isSelected, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: isSelected ? AppTheme.accent : Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: isSelected ? AppTheme.accent : Colors.white.withValues(alpha: 0.1)),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: isSelected ? Colors.white : Colors.white30, size: 18),
+              const SizedBox(height: 4),
+              Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.white30, fontSize: 8, fontWeight: FontWeight.bold)),
+            ],
+          ),
         ),
       ),
     );

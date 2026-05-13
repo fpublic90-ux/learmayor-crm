@@ -15,12 +15,16 @@ class InternRepository {
   };
 
   Future<List<Intern>> getInterns() async {
-    final response = await http.get(Uri.parse(ApiConfig.internsUrl), headers: _headers);
-    if (response.statusCode == 200) {
-      final List data = jsonDecode(response.body);
-      return data.map((i) => Intern.fromMap(i)).toList();
-    } else {
-      throw Exception('Failed to load interns');
+    try {
+      final response = await http.get(Uri.parse(ApiConfig.internsUrl), headers: _headers)
+          .timeout(const Duration(seconds: 45));
+      if (response.statusCode == 200) {
+        final List data = jsonDecode(response.body);
+        return data.map((i) => Intern.fromMap(i)).toList();
+      }
+      throw Exception('Server error (${response.statusCode})');
+    } catch (e) {
+      throw Exception('Server is warming up or connection lost. Please try again.');
     }
   }
 
@@ -46,27 +50,44 @@ class InternRepository {
       Uri.parse(ApiConfig.internsUrl),
       headers: _headers,
       body: jsonEncode(intern.toMap()),
-    );
+    ).timeout(const Duration(seconds: 45));
     if (response.statusCode != 201 && response.statusCode != 200) {
-      throw Exception('Failed to add intern');
+      throw Exception('Failed to add record (Status: ${response.statusCode})');
     }
   }
 
   Future<void> updateIntern(Intern intern) async {
+    final url = ApiConfig.internsUrl; // Upsert uses the base POST endpoint
+    final body = jsonEncode(intern.toMap());
+    debugPrint('📡 [UPSERT] Intern Request: $url');
+    debugPrint('📦 Payload: $body');
+    
     final response = await http.post(
-      Uri.parse(ApiConfig.internsUrl),
+      Uri.parse(url),
       headers: _headers,
-      body: jsonEncode(intern.toMap()),
-    );
+      body: body,
+    ).timeout(const Duration(seconds: 15));
+    
+    debugPrint('📥 [UPSERT] Intern Response (${response.statusCode}): ${response.body}');
+    
     if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception('Failed to update intern');
+      throw Exception('Update failed (Status: ${response.statusCode})');
     }
   }
 
   Future<void> deleteIntern(String id) async {
-    final response = await http.delete(Uri.parse('${ApiConfig.internsUrl}/$id'), headers: _headers);
-    if (response.statusCode != 200) {
-      throw Exception('Failed to delete intern');
+    final url = '${ApiConfig.internsUrl}/$id';
+    debugPrint('📡 [DELETE] Intern Request: $url');
+    
+    final response = await http.delete(
+      Uri.parse(url), 
+      headers: _headers
+    ).timeout(const Duration(seconds: 15));
+    
+    debugPrint('📥 [DELETE] Intern Response (${response.statusCode})');
+    
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw Exception('Deletion failed (Status: ${response.statusCode})');
     }
   }
 }

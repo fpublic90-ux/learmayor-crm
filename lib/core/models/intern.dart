@@ -73,7 +73,7 @@ class Intern {
 
   // Recreates the object from a stored Map
   factory Intern.fromMap(Map<String, dynamic> map) => Intern(
-        id: map['id'],
+        id: (map['id'] ?? map['_id'] ?? '').toString(),
         name: map['name'] ?? '',
         email: map['email'] ?? '',
         phone: map['phone'] ?? '',
