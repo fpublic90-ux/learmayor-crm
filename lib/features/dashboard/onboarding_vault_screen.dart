@@ -37,33 +37,46 @@ class _OnboardingVaultScreenState extends State<OnboardingVaultScreen> {
     final empProvider = context.read<EmployeeProvider>();
     final intProvider = context.read<InternProvider>();
 
-    // Force refresh official lists first to be sure
-    await Future.wait([
-      empProvider.fetchEmployees(),
-      intProvider.fetchInterns(),
-    ]);
+    try {
+      debugPrint('📡 Vault: Synchronizing Onboarding Data...');
+      // Force refresh official lists first to be sure
+      await Future.wait([
+        empProvider.fetchEmployees(),
+        intProvider.fetchInterns(),
+        auth.fetchAllUsers(),
+      ]);
 
-    await auth.fetchAllUsers();
-    final allUsers = auth.allUsers;
-    
-    // Filter out existing staff/interns by email (Case-Insensitive & Trimmed)
-    final existingEmails = {
-      ...empProvider.employees.map((e) => e.email.toLowerCase().trim()),
-      ...intProvider.interns.map((i) => i.email.toLowerCase().trim()),
-    };
+      final allUsers = auth.allUsers;
+      debugPrint('📥 Vault: Received ${allUsers.length} total users from database');
+      
+      // Filter out existing staff/interns by email (Case-Insensitive & Trimmed)
+      final existingEmails = {
+        ...empProvider.employees.map((e) => e.email.toLowerCase().trim()),
+        ...intProvider.interns.map((i) => i.email.toLowerCase().trim()),
+      };
 
-    final pending = allUsers.where((u) {
-      final email = (u['email'] as String?)?.toLowerCase().trim() ?? '';
-      return email.isNotEmpty && 
-             email != 'jafarevx123@gmail.com' && 
-             !existingEmails.contains(email);
-    }).toList();
+      final pending = allUsers.where((u) {
+        final email = (u['email'] as String?)?.toLowerCase().trim() ?? '';
+        final isAdmin = email == 'jafarevx123@gmail.com';
+        final isAlreadyOnboarded = existingEmails.contains(email);
+        
+        return email.isNotEmpty && !isAdmin && !isAlreadyOnboarded;
+      }).toList();
 
-    if (mounted) {
-      setState(() {
-        _pendingUsers = pending;
-        _isLoading = false;
-      });
+      debugPrint('🎯 Vault: Found ${pending.length} pending users for onboarding');
+
+      if (mounted) {
+        setState(() {
+          _pendingUsers = pending;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ Vault Error: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+        Globals.showSnackBar('Failed to synchronize vault: $e', isError: true);
+      }
     }
   }
 

@@ -4,17 +4,30 @@ import '../repositories/report_repository.dart';
 import '../utils/result.dart';
 
 class ReportProvider extends ChangeNotifier {
-  final ReportRepository _repository = ReportRepository();
+  ReportRepository _repository = ReportRepository();
   List<WorkReport> _reports = [];
   bool _isLoading = false;
   String? _errorMessage;
+  String? _token;
 
   List<WorkReport> get reports => _reports;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  ReportProvider() {
-    fetchReports();
+  ReportProvider();
+
+  // Handle token updates from AuthProvider
+  void updateToken(String? newToken) {
+    if (_token != newToken) {
+      _token = newToken;
+      _repository = ReportRepository(token: _token);
+      if (_token != null) {
+        fetchReports();
+      } else {
+        _reports = [];
+        notifyListeners();
+      }
+    }
   }
 
   // Get reports for a specific staff member

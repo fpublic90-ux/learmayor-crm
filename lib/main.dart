@@ -48,7 +48,10 @@ void main() async {
           update: (_, auth, attendance) => attendance!..updateToken(auth.token),
         ),
         ChangeNotifierProvider(create: (_) => CompanyProvider()),
-        ChangeNotifierProvider(create: (_) => ReportProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, ReportProvider>(
+          create: (_) => ReportProvider(),
+          update: (_, auth, report) => report!..updateToken(auth.token),
+        ),
       ],
       child: const LearnyorHRMApp(),
     ),
