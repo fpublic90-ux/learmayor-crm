@@ -50,10 +50,13 @@ class EmployeeProvider extends ChangeNotifier {
   }
 
   // Fetches all employees and updates the local list
-  Future<void> fetchEmployees() async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
+  Future<void> fetchEmployees({bool force = false}) async {
+    // Only show shimmer if we have no data yet or if forced
+    if (_employees.isEmpty || force) {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+    }
 
     try {
       final newEmployees = await _repository.getEmployees();

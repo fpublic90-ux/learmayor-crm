@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../app/theme.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -754,4 +755,85 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Size get preferredSize => const Size.fromHeight(70);
+}
+
+/// A high-fidelity kinetic button with loading and semantic support
+class PremiumButton extends StatelessWidget {
+  final String label;
+  final VoidCallback? onPressed;
+  final bool isLoading;
+  final bool isOutline;
+  final Color? color;
+  final IconData? icon;
+
+  const PremiumButton({
+    super.key,
+    required this.label,
+    this.onPressed,
+    this.isLoading = false,
+    this.isOutline = false,
+    this.color,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final themeColor = color ?? AppTheme.primary;
+    final isDisabled = onPressed == null || isLoading;
+
+    return AnimatedScale(
+      scale: isLoading ? 0.98 : 1.0,
+      duration: const Duration(milliseconds: 150),
+      child: GestureDetector(
+        onTap: isDisabled ? null : () {
+          HapticFeedback.lightImpact();
+          onPressed!();
+        },
+        child: Container(
+          height: 56,
+          decoration: BoxDecoration(
+            color: isOutline ? Colors.transparent : (isDisabled ? themeColor.withOpacity(0.5) : themeColor),
+            borderRadius: BorderRadius.circular(16),
+            border: isOutline ? Border.all(color: themeColor, width: 2) : null,
+            boxShadow: (!isOutline && !isDisabled) ? [
+              BoxShadow(
+                color: themeColor.withOpacity(0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              )
+            ] : null,
+          ),
+          child: Center(
+            child: isLoading
+              ? SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    valueColor: AlwaysStoppedAnimation<Color>(isOutline ? themeColor : Colors.white),
+                  ),
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (icon != null) ...[
+                      Icon(icon, color: isOutline ? themeColor : Colors.white, size: 20),
+                      const SizedBox(width: 12),
+                    ],
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: isOutline ? themeColor : Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+          ),
+        ),
+      ),
+    );
+  }
 }

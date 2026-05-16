@@ -50,10 +50,13 @@ class InternProvider extends ChangeNotifier {
   }
 
   // Method to retrieve all interns from the repository
-  Future<void> fetchInterns() async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
+  Future<void> fetchInterns({bool force = false}) async {
+    // Only show shimmer if we have no data yet or if forced
+    if (_interns.isEmpty || force) {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+    }
 
     try {
       final newInterns = await _repository.getInterns();

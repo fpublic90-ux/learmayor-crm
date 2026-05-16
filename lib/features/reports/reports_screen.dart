@@ -147,6 +147,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       const SizedBox(height: 32),
                       _buildWorkLogReview(reportProvider, theme, true),
                       const SizedBox(height: 32),
+                      _buildActionCard(
+                        title: 'Manage Leave',
+                        subtitle: 'Approve/Reject requests',
+                        icon: Icons.event_note_rounded,
+                        color: AppTheme.primary,
+                        onTap: () => context.push('/reports/leave'),
+                      ),
+                      const SizedBox(height: 16),
                       _buildExportCard(
                         context.read<CompanyProvider>().name ?? 'Learnyor CRM',
                         employees,
@@ -363,16 +371,49 @@ class _ReportsScreenState extends State<ReportsScreen> {
     ]);
   }
 
-  Widget _buildExportCard(String cName, List<Employee> e, List<Intern> i, int today, List<MapEntry<String, int>> d, ThemeData theme) {
+  Widget _buildActionCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    VoidCallback? onTap,
+  }) {
     return BentoCard(
-      onTap: _isExporting ? null : () => _handleExport(companyName: cName, employees: e, interns: i, todayAttendance: today, departments: d),
+      onTap: onTap,
       padding: const EdgeInsets.all(24),
-      child: Row(children: [
-        Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: AppTheme.error.withOpacity(0.08), borderRadius: BorderRadius.circular(16)), child: const Icon(Icons.picture_as_pdf_rounded, color: AppTheme.error, size: 28)),
-        const SizedBox(width: 16),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Executive Summary', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)), Text('Export PDF Analysis', style: theme.textTheme.bodySmall?.copyWith(color: AppTheme.textLight))])),
-        const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textLight),
-      ]),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                Text(subtitle, style: const TextStyle(fontSize: 12, color: AppTheme.textLight)),
+              ],
+            ),
+          ),
+          const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textLight),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExportCard(String cName, List<Employee> e, List<Intern> i, int today, List<MapEntry<String, int>> d, ThemeData theme) {
+    return _buildActionCard(
+      title: 'Executive Summary',
+      subtitle: 'Export PDF Analysis',
+      icon: Icons.picture_as_pdf_rounded,
+      color: AppTheme.error,
+      onTap: _isExporting ? null : () => _handleExport(companyName: cName, employees: e, interns: i, todayAttendance: today, departments: d),
     );
   }
 }

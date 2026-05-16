@@ -52,10 +52,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
+    // Only rebuild if the user's login state or role changes
+    final isAdmin = context.select<AuthProvider, bool>((a) => a.isAdmin);
     return Scaffold(
       backgroundColor: AppTheme.background,
-      body: auth.isAdmin ? _buildAdminView() : _buildStaffView(auth),
+      body: isAdmin ? _buildAdminView() : _buildStaffView(),
     );
   }
 
@@ -64,84 +65,115 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   // --- ADMIN VIEW (REGISTRY) ---
   Widget _buildAdminView() {
     final theme = Theme.of(context);
-    final employeeProvider = context.watch<EmployeeProvider>();
-    final internProvider = context.watch<InternProvider>();
-    final attendanceProvider = context.watch<AttendanceProvider>();
+    
+    // Selective Watching for Admin View
+    final isLoading = context.select<EmployeeProvider, bool>((p) => p.isLoading) ||
+                     context.select<InternProvider, bool>((p) => p.isLoading) ||
+                     context.select<AttendanceProvider, bool>((p) => p.isLoading);
+    
+    if (isLoading) {
+      return Center(
+        child: ShimmerLoading(
+          width: 60,
+          height: 60,
+          borderRadius: 30,
+        ),
+      );
+    }
+
+    final employeeProvider = context.read<EmployeeProvider>();
+    final internProvider = context.read<InternProvider>();
+    final attendanceProvider = context.watch<AttendanceProvider>(); // Still watch for calendar updates
 
     final attendanceList = attendanceProvider.getAttendanceForDate(_selectedDate);
     final attendanceMap = {for (var r in attendanceList) r.personId: r};
 
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 400),
-      switchInCurve: Curves.easeInOutCubic,
-      switchOutCurve: Curves.easeInOutCubic,
-      transitionBuilder: (Widget child, Animation<double> animation) {
-        return FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.05),
-              end: Offset.zero,
-            ).animate(animation),
-            child: child,
-          ),
-        );
-      },
-      child: _isCalendarView 
-        ? _buildCalendarHub(theme, attendanceProvider)
-        : _buildDailyRegistry(theme, employeeProvider, internProvider, attendanceProvider, attendanceMap),
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 600),
+        switchInCurve: Curves.easeOutQuart,
+        switchOutCurve: Curves.easeInQuart,
+        transitionBuilder: (Widget child, Animation<double> animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.02),
+                end: Offset.zero,
+              ).animate(animation),
+              child: child,
+            ),
+          );
+        },
+        child: _isCalendarView 
+          ? _buildCalendarHub(theme, attendanceProvider)
+          : _buildDailyRegistry(theme, employeeProvider, internProvider, attendanceProvider, attendanceMap),
+      ),
+     
     );
   }
 
   Widget _buildCalendarHub(ThemeData theme, AttendanceProvider provider) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        toolbarHeight: 100,
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [AppTheme.primary.withOpacity(0.05), AppTheme.background],
+        ),
+      ),
+      child: Scaffold(
         backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: false,
-        title: Padding(
-          padding: const EdgeInsets.only(left: 8),
+        appBar: AppBar(
+          toolbarHeight: 120,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          flexibleSpace: ClipRRect(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(color: Colors.white.withOpacity(0.2)),
+            ),
+          ),
+          title: Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Attendance Hub', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -1, color: AppTheme.textDark)),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(color: AppTheme.primary, borderRadius: BorderRadius.circular(8)),
+                  child: Text(DateFormat('MMMM yyyy').format(_selectedDate).toUpperCase(), 
+                    style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+          
+            const SizedBox(width: 24),
+          ],
+        ),
+        body: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 120),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Attendance Hub', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5, color: AppTheme.textDark)),
-              const SizedBox(height: 4),
-              Text(DateFormat('MMMM yyyy').format(_selectedDate).toUpperCase(), 
-                style: const TextStyle(fontSize: 11, color: AppTheme.primary, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+            children: [  
+              _buildSectionHeader('ORGANIZATIONAL CALENDAR', Icons.grid_view_rounded),
+              const SizedBox(height: 20),
+              BentoCard(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                child: _buildAdminCalendar(theme),
+              ),
+              const SizedBox(height: 32),
+              _buildSectionHeader('STATUS CLASSIFICATION', Icons.layers_rounded),
+              const SizedBox(height: 20),
+              _buildLegend(theme),
             ],
           ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: () => setState(() => _selectedDate = DateTime.now()),
-            icon: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: AppTheme.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.today_rounded, color: AppTheme.primary, size: 20),
-            ),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 100),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [  
-            _buildSectionHeader('ORGANIZATIONAL CALENDAR', Icons.grid_view_rounded),
-            const SizedBox(height: 16 ),
-            BentoCard(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-              child: _buildAdminCalendar(theme),
-            ),
-            const SizedBox(height: 32),
-            _buildSectionHeader('STATUS CLASSIFICATION', Icons.layers_rounded),
-            const SizedBox(height: 16),
-            _buildLegend(theme),
-          ],
         ),
       ),
     );
@@ -264,19 +296,28 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
 
             return GestureDetector(
               onTap: () {
-                HapticFeedback.lightImpact();
+                HapticFeedback.mediumImpact();
                 setState(() {
                   _selectedDate = date;
                   _isCalendarView = false;
                 });
               },
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
+                duration: const Duration(milliseconds: 300),
                 decoration: BoxDecoration(
-                  color: isSelected ? AppTheme.primary : (isToday ? AppTheme.primary.withValues(alpha: 0.1) : Colors.transparent),
-                  borderRadius: BorderRadius.circular(14),
-                  border: isSelected ? null : Border.all(color: isToday ? AppTheme.primary.withValues(alpha: 0.3) : AppTheme.border.withValues(alpha: 0.5), width: 1.5),
-                  boxShadow: isSelected ? [BoxShadow(color: AppTheme.primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))] : null,
+                  color: isSelected ? AppTheme.primary : (isToday ? AppTheme.primary.withOpacity(0.08) : Colors.transparent),
+                  borderRadius: BorderRadius.circular(16),
+                  border: isSelected ? null : Border.all(
+                    color: isToday ? AppTheme.primary.withOpacity(0.4) : AppTheme.border.withOpacity(0.5), 
+                    width: 1.5
+                  ),
+                  boxShadow: isSelected ? [
+                    BoxShadow(
+                      color: AppTheme.primary.withOpacity(0.4),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                    )
+                  ] : null,
                 ),
                 alignment: Alignment.center,
                 child: Text(
@@ -284,7 +325,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
                   style: TextStyle(
                     fontWeight: isSelected || isToday ? FontWeight.w900 : FontWeight.bold,
                     color: isSelected ? Colors.white : (isToday ? AppTheme.primary : AppTheme.textDark),
-                    fontSize: 15,
+                    fontSize: 16,
                   ),
                 ),
               ),
@@ -296,33 +337,34 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
   }
 
   // --- STAFF VIEW (CALENDAR) ---
-  Widget _buildStaffView(AuthProvider auth) {
-    final employeeProvider = context.watch<EmployeeProvider>();
-    final internProvider = context.watch<InternProvider>();
-    final attendanceProvider = context.watch<AttendanceProvider>();
+  Widget _buildStaffView() {
+    // Selective Watching: Only rebuild if IDs or specific loading states change
+    final isLoading = context.select<EmployeeProvider, bool>((p) => p.isLoading) ||
+                     context.select<InternProvider, bool>((p) => p.isLoading) ||
+                     context.select<AttendanceProvider, bool>((p) => p.isLoading);
     
-    if (employeeProvider.isLoading || internProvider.isLoading || attendanceProvider.isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary),
+    if (isLoading) {
+      return Center(
+        child: ShimmerLoading(
+          width: 60,
+          height: 60,
+          borderRadius: 30,
+        ),
       );
     }
 
+    final auth = context.read<AuthProvider>();
     final userEmail = auth.userEmail?.toLowerCase().trim();
     if (userEmail == null) return const _StaffCalendarView(staffId: 'anonymous');
 
-    String? resolvedId;
-    final empMatch = employeeProvider.employees.where((e) => e.email.toLowerCase().trim() == userEmail);
-    if (empMatch.isNotEmpty) {
-      resolvedId = empMatch.first.id;
-    } else {
-      final intMatch = internProvider.interns.where((i) => i.email.toLowerCase().trim() == userEmail);
-      if (intMatch.isNotEmpty) {
-        resolvedId = intMatch.first.id;
-      }
-    }
+    final resolvedId = context.select<EmployeeProvider, String?>((p) {
+      final match = p.employees.where((e) => e.email.toLowerCase().trim() == userEmail);
+      return match.isNotEmpty ? match.first.id : null;
+    }) ?? context.select<InternProvider, String?>((p) {
+      final match = p.interns.where((i) => i.email.toLowerCase().trim() == userEmail);
+      return match.isNotEmpty ? match.first.id : null;
+    });
 
-    final isSynchronized = resolvedId != null;
-    
     return Column(
       children: [
         Expanded(child: _StaffCalendarView(staffId: resolvedId ?? 'anonymous')),
@@ -477,9 +519,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPr
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _LegendItem(label: 'PRESENT', color: AppTheme.success),
-          _LegendItem(label: 'HALF-DAY', color: AppTheme.warning),
-          _LegendItem(label: 'ABSENT', color: AppTheme.error),
+          _LegendItem(label: 'PRESENT', color: AppTheme.success, isGlow: true),
+          _LegendItem(label: 'HALF-DAY', color: AppTheme.warning, isGlow: true),
+          _LegendItem(label: 'ABSENT', color: AppTheme.error, isGlow: true),
         ],
       ),
     );
@@ -579,7 +621,7 @@ class _StaffCalendarViewState extends State<_StaffCalendarView> {
                 ),
               ),
               const SizedBox(height: 32),
-              _buildLegend(theme),
+        
             ],
           ),
         ),
@@ -593,7 +635,9 @@ class _StaffCalendarViewState extends State<_StaffCalendarView> {
     bool hasRecord = record.personId.isNotEmpty;
 
     if (hasRecord) {
-      color = record.status == AttendanceStatus.present ? AppTheme.success : (record.status == AttendanceStatus.halfDay ? AppTheme.warning : AppTheme.error.withValues(alpha: 0.1));
+      color = record.status == AttendanceStatus.present 
+        ? AppTheme.success 
+        : (record.status == AttendanceStatus.halfDay ? AppTheme.warning : AppTheme.error.withOpacity(0.15));
       textColor = record.status == AttendanceStatus.absent ? AppTheme.error : Colors.white;
     }
 
@@ -601,40 +645,78 @@ class _StaffCalendarViewState extends State<_StaffCalendarView> {
       duration: const Duration(milliseconds: 300),
       decoration: BoxDecoration(
         color: color, 
-        borderRadius: BorderRadius.circular(14), 
-        border: hasRecord ? null : Border.all(color: AppTheme.border.withValues(alpha: 0.5), width: 1.5),
-        boxShadow: hasRecord && record.status != AttendanceStatus.absent ? [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 3))] : null,
+        borderRadius: BorderRadius.circular(16), 
+        border: hasRecord ? null : Border.all(color: AppTheme.border.withOpacity(0.4), width: 1.5),
+        boxShadow: (hasRecord && record.status != AttendanceStatus.absent) ? [
+          BoxShadow(
+            color: color.withOpacity(0.5),
+            blurRadius: 15,
+            spreadRadius: 1,
+          )
+        ] : null,
       ),
       alignment: Alignment.center,
-      child: Text('$day', style: TextStyle(fontWeight: FontWeight.w900, color: textColor, fontSize: 14)),
+      child: Text(
+        '$day', 
+        style: TextStyle(
+          fontWeight: FontWeight.w900, 
+          color: textColor, 
+          fontSize: 15
+        )
+      ),
     );
   }
 
-  Widget _buildLegend(ThemeData theme) {
-    return BentoCard(
-      padding: const EdgeInsets.all(24),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _LegendItem(label: 'PRESENT', color: AppTheme.success),
-          _LegendItem(label: 'HALF-DAY', color: AppTheme.warning),
-          _LegendItem(label: 'ABSENT', color: AppTheme.error),
-        ],
-      ),
-    );
-  }
+
 }
 
 class _LegendItem extends StatelessWidget {
-  final String label; final Color color;
-  const _LegendItem({required this.label, required this.color});
+  final String label;
+  final Color color;
+  final bool isGlow;
+
+  const _LegendItem({
+    required this.label,
+    required this.color,
+    this.isGlow = false,
+  });
+
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle, boxShadow: [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 4, offset: const Offset(0, 2))])),
-        const SizedBox(height: 8),
-        Text(label, style: const TextStyle(fontSize: 9, color: AppTheme.textMid, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            boxShadow: isGlow ? [
+              BoxShadow(
+                color: color.withValues(alpha: 0.6),
+                blurRadius: 10,
+                spreadRadius: 2,
+                offset: const Offset(0, 0),
+              )
+            ] : [
+              BoxShadow(
+                color: color.withValues(alpha: 0.4),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              )
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 9,
+            color: AppTheme.textMid,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.5,
+          ),
+        ),
       ],
     );
   }

@@ -11,10 +11,12 @@ import '../features/interns/intern_detail_screen.dart';
 import '../features/attendance/attendance_screen.dart';
 import '../features/reports/reports_screen.dart';
 import '../features/reports/admin_reports_list_screen.dart';
+import '../features/leave/admin_leave_list_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/staff/staff_hub_screen.dart';
 import '../features/staff/submit_report_screen.dart';
 import '../features/dashboard/onboarding_vault_screen.dart';
+import '../features/leave/request_leave_screen.dart';
 import 'shell_layout.dart';
 
 class AppRouter {
@@ -82,12 +84,14 @@ class AppRouter {
             GoRoute(path: '/attendance', builder: (_, __) => const AttendanceScreen()),
             GoRoute(path: '/reports', builder: (_, __) => const ReportsScreen()),
             GoRoute(path: '/reports/admin', builder: (_, __) => const AdminReportsListScreen()),
+            GoRoute(path: '/reports/leave', builder: (_, __) => const AdminLeaveListScreen()),
             GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
             GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingVaultScreen()),
 
             // Staff Portal Specific Routes
             GoRoute(path: '/staff/hub', builder: (_, __) => const StaffHubScreen()),
             GoRoute(path: '/staff/report/add', builder: (_, __) => const SubmitReportScreen()),
+            GoRoute(path: '/staff/leave/request', builder: (_, __) => const RequestLeaveScreen()),
           ],
         ),
       ],

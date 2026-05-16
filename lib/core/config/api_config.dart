@@ -11,6 +11,7 @@ class ApiConfig {
   // Reports and Attendance are prefixed with /api
   static const String reportsUrl = '$baseUrl/api/reports';
   static const String attendanceUrl = '$baseUrl/attendance';
+  static const String leavesUrl = '$baseUrl/api/leaves';
 
   static String getFullImageUrl(String? path) {
     if (path == null || path.isEmpty) return '';

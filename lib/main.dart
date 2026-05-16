@@ -11,6 +11,7 @@ import 'core/providers/intern_provider.dart';
 import 'core/providers/attendance_provider.dart';
 import 'core/providers/company_provider.dart';
 import 'core/providers/report_provider.dart';
+import 'core/providers/leave_provider.dart';
 
 void main() async {
   // Ensuring the Flutter engine is ready before calling any async methods
@@ -51,6 +52,10 @@ void main() async {
         ChangeNotifierProxyProvider<AuthProvider, ReportProvider>(
           create: (_) => ReportProvider(),
           update: (_, auth, report) => report!..updateToken(auth.token),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, LeaveProvider>(
+          create: (_) => LeaveProvider(),
+          update: (_, auth, leave) => leave!..updateToken(auth.token),
         ),
       ],
       child: const LearnyorHRMApp(),

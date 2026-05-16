@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:learnyor_hrm/core/config/api_config.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
@@ -65,14 +66,20 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final reportProvider = context.watch<ReportProvider>();
-    final employeeProvider = context.watch<EmployeeProvider>();
-    final internProvider = context.watch<InternProvider>();
-    final employeeEmails = employeeProvider.employees.map((e) => e.email.toLowerCase().trim()).toSet();
-    final internEmails = internProvider.interns.map((i) => i.email.toLowerCase().trim()).toSet();
+    final reportProvider = context.read<ReportProvider>();
+    final isLoading = context.select<ReportProvider, bool>((p) => p.isLoading);
+    final reports = context.select<ReportProvider, List<WorkReport>>((p) => p.reports);
+    
+    // Selective Watching: Only rebuild if these specific sets change
+    final employeeEmails = context.select<EmployeeProvider, Set<String>>(
+      (p) => p.employees.map((e) => e.email.toLowerCase().trim()).toSet()
+    );
+    final internEmails = context.select<InternProvider, Set<String>>(
+      (p) => p.interns.map((i) => i.email.toLowerCase().trim()).toSet()
+    );
     
     // Filter logic
-    List<WorkReport> filteredReports = List.from(reportProvider.reports);
+    List<WorkReport> filteredReports = List.from(reports);
     
     // 1. Status Filter
     if (_filterStatus != null) {
@@ -256,7 +263,7 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
                               PopupMenuItem(
                                 value: 'ALL', 
                                 height: 40,
-                                child: _buildMenuRow(Icons.groups_rounded, 'All Roles', AppTheme.textMid, isSelected: _filterRole == null || _filterRole == 'ALL'),
+                                child: _buildMenuRow(Icons.groups_rounded, 'everyone', AppTheme.textMid, isSelected: _filterRole == null || _filterRole == 'ALL'),
                               ),
                               PopupMenuItem(
                                 value: 'STAFF', 
@@ -270,7 +277,7 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
                               ),
                             ],
                             child: _StatusChip(
-                              label: (_filterRole == null || _filterRole == 'ALL') ? 'All Roles' : _filterRole!,
+                              label: (_filterRole == null || _filterRole == 'ALL') ? 'everyone' : _filterRole!,
                               isSelected: _filterRole != null && _filterRole != 'ALL',
                               icon: Icons.person_search_rounded,
                               isDropdown: true,
@@ -286,7 +293,7 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
             ),
           ),
         ],
-        body: reportProvider.isLoading 
+        body: isLoading 
           ? const SkeletonList()
           : filteredReports.isEmpty
             ? EmptyStateWidget(
@@ -328,10 +335,13 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
     final statusStr = report.status.toString().split('.').last;
     final statusColor = statusStr == 'approved' ? AppTheme.success : (statusStr == 'rejected' ? AppTheme.error : AppTheme.accent);
     
-    // Determine Role (Secure Email correlation)
     final authorEmail = report.staffId.toLowerCase().trim();
-    final isEmployee = context.read<EmployeeProvider>().employees.any((e) => e.email.toLowerCase().trim() == authorEmail);
-    final isIntern = !isEmployee && context.read<InternProvider>().interns.any((i) => i.email.toLowerCase().trim() == authorEmail);
+    final employee = context.read<EmployeeProvider>().employees.where((e) => e.email.toLowerCase().trim() == authorEmail).firstOrNull;
+    final intern = employee == null ? context.read<InternProvider>().interns.where((i) => i.email.toLowerCase().trim() == authorEmail).firstOrNull : null;
+    
+    final photoUrl = employee?.photoUrl ?? intern?.photoUrl;
+    final isEmployee = employee != null;
+    final isIntern = !isEmployee && intern != null;
     final roleLabel = isEmployee ? 'STAFF' : (isIntern ? 'INTERN' : 'NEW');
     final roleColor = isEmployee ? AppTheme.primary : AppTheme.accent;
 
@@ -344,7 +354,7 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
           children: [
             Row(
               children: [
-                _buildAvatar(report),
+                _buildAvatar(report, photoUrl),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -379,16 +389,39 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
                   padding: const EdgeInsets.only(bottom: 6),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Icon(Icons.circle, size: 4, color: AppTheme.primary.withValues(alpha: 0.5)),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(t, style: theme.textTheme.bodySmall?.copyWith(color: AppTheme.textMid, fontWeight: FontWeight.w600)),
-                      ),
-                    ],
+                 children: [
+  Container(
+    padding: const EdgeInsets.symmetric(
+      horizontal: 8,
+      vertical: 4,
+    ),
+    decoration: BoxDecoration(
+      color: AppTheme.primary.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(30),
+    ),
+    child: Text(
+      "•",
+      style: TextStyle(
+        color: AppTheme.primary,
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+        height: 1,
+      ),
+    ),
+  ),
+
+  const SizedBox(width: 10),
+
+  Expanded(
+    child: Text(
+      t,
+      style: theme.textTheme.bodyMedium?.copyWith(
+        color: AppTheme.textMid,
+        fontWeight: FontWeight.w500,
+      ),
+    ),
+  ),
+],
                   ),
                 )).toList(),
               ),
@@ -414,20 +447,11 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
     );
   }
 
-  Widget _buildAvatar(WorkReport report) {
-    return Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: AppTheme.primary.withValues(alpha: 0.1),
-        shape: BoxShape.circle,
-      ),
-      child: Center(
-        child: Text(
-          report.staffName.isNotEmpty ? report.staffName[0].toUpperCase() : '?',
-          style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-      ),
+  Widget _buildAvatar(WorkReport report, String? photoUrl) {
+    return PremiumImage(
+      imageUrl: ApiConfig.getFullImageUrl(photoUrl),
+      size: 44,
+      isCircle: true,
     );
   }
 

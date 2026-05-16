@@ -29,10 +29,13 @@ class AttendanceProvider extends ChangeNotifier {
   }
 
   // Method to fetch all attendance data from the repository
-  Future<void> fetchAttendance() async {
-    _isLoading = true; // Show loading spinner in UI
-    _errorMessage = null;
-    notifyListeners(); // Notify UI to rebuild
+  Future<void> fetchAttendance({bool force = false}) async {
+    // Only show shimmer if we have no data yet or if forced
+    if (_attendanceRecords.isEmpty || force) {
+      _isLoading = true; 
+      _errorMessage = null;
+      notifyListeners(); 
+    }
 
     try {
       _attendanceRecords = await _repository.getAttendance();

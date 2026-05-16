@@ -404,5 +404,5 @@ class _SliverSearchDelegate extends SliverPersistentHeaderDelegate {
   }
 
   @override
-  bool shouldRebuild(_SliverSearchDelegate oldDelegate) => false;
+  bool shouldRebuild(_SliverSearchDelegate oldDelegate) => true;
 }

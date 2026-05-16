@@ -106,19 +106,24 @@ class _ShellLayoutState extends State<ShellLayout>
     } catch (_) {}
 
     if (latestName != null && latestName != auth.userName) {
-      debugPrint('🔄 Auth Sync: Updating local name to $latestName');
-      auth.refreshLocalProfile(name: latestName);
+      final nameToSync = latestName!; // Shadow to non-nullable for closure capture
+      Future.microtask(() {
+        debugPrint('🔄 Auth Sync: Updating local name to $nameToSync');
+        auth.refreshLocalProfile(name: nameToSync);
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Watch providers to trigger rebuilds when directory data arrives/updates
-    context.watch<EmployeeProvider>();
-    context.watch<InternProvider>();
-    
-    // Reactive sync
-    WidgetsBinding.instance.addPostFrameCallback((_) => _syncProfileWithDirectory(context));
+    // Only rebuild if the login status or role changes
+    final isLoggedIn = context.select<AuthProvider, bool>((a) => a.isLoggedIn);
+    final role = context.select<AuthProvider, UserRole>((a) => a.role);
+
+    // Sync profile data when directory state changes, but don't watch the whole provider
+    if (isLoggedIn && role != UserRole.admin) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _syncProfileWithDirectory(context));
+    }
     
     final size = MediaQuery.of(context).size;
     final isDesktop = size.width > 900;
@@ -157,7 +162,8 @@ class _ShellLayoutState extends State<ShellLayout>
         ),
       ),
       bottomNavigationBar: _buildBottomNavBar(context),
-    );
+    );     
+    
   }
 
   String _getAppBarTitle(String location) {
@@ -218,6 +224,15 @@ class _ShellLayoutState extends State<ShellLayout>
                 onTap: () { if (location != '/attendance') context.go('/attendance'); },
               ),
               
+              if (!auth.isAdmin && auth.isLoggedIn)
+                _BottomNavItem(
+                  icon: Icons.add_rounded,
+                  label: 'Add',
+                  isSelected: location == '/staff/report/add',
+                  isPremium: true,
+                  onTap: () => context.push('/staff/report/add'),
+                ),
+
               // Interns only visible to Admin
               if (auth.isAdmin)
                 _BottomNavItem(
@@ -255,12 +270,14 @@ class _BottomNavItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool isSelected;
+  final bool isPremium;
   final VoidCallback onTap;
 
   const _BottomNavItem({
     required this.icon,
     required this.label,
     required this.isSelected,
+    this.isPremium = false,
     required this.onTap,
   });
 
@@ -274,28 +291,45 @@ class _BottomNavItem extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        padding: EdgeInsets.symmetric(
+          horizontal: isPremium ? 12 : 8, 
+          vertical: isPremium ? 12 : 8
+        ),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary.withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          color: isPremium 
+              ? AppTheme.accent 
+              : (isSelected ? AppTheme.primary.withOpacity(0.1) : Colors.transparent),
+          shape: isPremium ? BoxShape.circle : BoxShape.rectangle,
+          borderRadius: isPremium ? null : BorderRadius.circular(12),
+          boxShadow: isPremium ? [
+            BoxShadow(
+              color: AppTheme.accent.withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            )
+          ] : null,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
-              color: isSelected ? AppTheme.primary : AppTheme.textLight,
-              size: 20,
+              color: isPremium 
+                  ? Colors.white 
+                  : (isSelected ? AppTheme.primary : AppTheme.textLight),
+              size: isPremium ? 26 : 20,
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? AppTheme.primary : AppTheme.textLight,
-                fontSize: 10,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            if (!isPremium) ...[
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? AppTheme.primary : AppTheme.textLight,
+                  fontSize: 10,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
