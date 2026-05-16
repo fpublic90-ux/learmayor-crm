@@ -68,6 +68,9 @@ class StaffHubScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                   _buildDailyAction(context, theme),
                   
+                  const SizedBox(height: 24),
+                  _buildAttendanceSummary(context, theme),
+
                   if (myRecord != null) ...[
                     const SizedBox(height: 32),
                     Text('OFFICIAL DETAILS', style: theme.textTheme.labelLarge),
@@ -212,6 +215,36 @@ class StaffHubScreen extends StatelessWidget {
 
   void _showSubmitDialog(BuildContext context) {
     context.push('/staff/report/add');
+  }
+
+  Widget _buildAttendanceSummary(BuildContext context, ThemeData theme) {
+    return BentoCard(
+      onTap: () => context.push('/attendance'),
+      padding: const EdgeInsets.all(24),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.success.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.event_available_rounded, color: AppTheme.success, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Attendance Tracking', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                const Text('View your monthly work presence', style: TextStyle(color: AppTheme.textMid, fontSize: 11)),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: AppTheme.textMid),
+        ],
+      ),
+    );
   }
 }
 

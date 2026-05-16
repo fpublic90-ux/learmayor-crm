@@ -10,7 +10,7 @@ import '../../app/theme.dart';
 import '../../core/widgets/premium_widgets.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 
-enum EmployeeSortType { name, designation, salary }
+enum EmployeeSortType { name, designation, salary, date }
 
 class EmployeesScreen extends StatefulWidget {
   const EmployeesScreen({super.key});
@@ -22,12 +22,17 @@ class EmployeesScreen extends StatefulWidget {
 class _EmployeesScreenState extends State<EmployeesScreen> {
   String _searchQuery = '';
   String _selectedDepartment = 'All';
-  EmployeeSortType _sortType = EmployeeSortType.name;
-  bool _isAscending = true;
+  EmployeeSortType _sortType = EmployeeSortType.date;
+  bool _isAscending = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<EmployeeProvider>().fetchEmployees();
+      }
+    });
     debugPrint('👥 [INIT] EmployeesScreen');
   }
 
@@ -74,6 +79,9 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
           case EmployeeSortType.salary:
             comparison = a.salary.compareTo(b.salary);
             break;
+          case EmployeeSortType.date:
+            comparison = a.joiningDate.compareTo(b.joiningDate);
+            break;
         }  
         return _isAscending ? comparison : -comparison;
       });
@@ -85,7 +93,7 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
           headerSliverBuilder: (context, innerBoxIsScrolled) => [
             SliverAppBar(
               centerTitle: false,
-              expandedHeight: 120,
+              expandedHeight: 80,
               pinned: true,
               stretch: true,
               backgroundColor: AppTheme.background.withValues(alpha: 0.8),
@@ -97,10 +105,10 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                 ),
                 const SizedBox(width: 8),
               ],
-              flexibleSpace: FlexibleSpaceBar(
-                stretchModes: const [StretchMode.zoomBackground],
+              flexibleSpace: const FlexibleSpaceBar(
+                stretchModes: [StretchMode.zoomBackground],
                 titlePadding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 centerTitle: true,
                 title: Text(
                   'Staff Directory',style: TextStyle(fontSize: 20)
@@ -322,9 +330,9 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
             Text('Sort Staff By', style: theme.textTheme.headlineSmall),
             const SizedBox(height: 24),
             _buildSortOption('Name', EmployeeSortType.name, theme),
-            _buildSortOption(
-                'Designation', EmployeeSortType.designation, theme),
+            _buildSortOption('Designation', EmployeeSortType.designation, theme),
             _buildSortOption('Salary', EmployeeSortType.salary, theme),
+            _buildSortOption('Joining Date', EmployeeSortType.date, theme),
             const Divider(height: 40, color: AppTheme.divider),
             SwitchListTile(
               title: Text('Ascending Order', style: theme.textTheme.titleSmall),

@@ -96,17 +96,18 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: const Text('Daily Report'),
+        title: Text('Work Log Submission', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        physics: const BouncingScrollPhysics(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('WHAT DID YOU ACHIEVE TODAY?', style: theme.textTheme.labelLarge),
+            _buildSectionHeader('CORE DETAILS', Icons.assessment_rounded),
             const SizedBox(height: 16),
             BentoCard(
               padding: const EdgeInsets.all(24),
@@ -115,27 +116,27 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                   TextField(
                     controller: _hoursController,
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       labelText: 'Hours Worked',
-                      prefixIcon: const Icon(Icons.timer_outlined),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: Icon(Icons.timer_rounded),
+                      hintText: 'e.g. 8',
                     ).applyDefaults(theme.inputDecorationTheme),
                   ),
                   const SizedBox(height: 20),
                   TextField(
                     controller: _descriptionController,
-                    maxLines: 5,
-                    decoration: InputDecoration(
-                      hintText: 'Describe your accomplishments...',
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Daily Description',
+                      hintText: 'Briefly summarize your day...',
                       alignLabelWithHint: true,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ).applyDefaults(theme.inputDecorationTheme),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 32),
-            Text('TASKS COMPLETED', style: theme.textTheme.labelLarge),
+            _buildSectionHeader('SPECIFIC ACHIEVEMENTS', Icons.fact_check_rounded),
             const SizedBox(height: 16),
             BentoCard(
               padding: const EdgeInsets.all(20),
@@ -146,9 +147,9 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                       Expanded(
                         child: TextField(
                           controller: _taskController,
-                          decoration: InputDecoration(
-                            hintText: 'Add a specific task...',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          decoration: const InputDecoration(
+                            hintText: 'Add a professional task...',
+                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           ).applyDefaults(theme.inputDecorationTheme),
                           onSubmitted: (_) => _addTask(),
                         ),
@@ -157,24 +158,18 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                       IconButton.filled(
                         onPressed: _addTask,
                         icon: const Icon(Icons.add_rounded),
-                        style: IconButton.styleFrom(backgroundColor: AppTheme.accent),
+                        style: IconButton.styleFrom(
+                          backgroundColor: AppTheme.primary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
                       ),
                     ],
                   ),
                   if (_tasks.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _tasks.map((task) => Chip(
-                        label: Text(task, style: const TextStyle(fontSize: 12)),
-                        onDeleted: () => setState(() => _tasks.remove(task)),
-                        deleteIconColor: AppTheme.error,
-                        backgroundColor: AppTheme.divider,
-                        side: BorderSide.none,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      )).toList(),
-                    ),
+                    const SizedBox(height: 20),
+                    const Divider(height: 1),
+                    const SizedBox(height: 12),
+                    ..._tasks.map((task) => _buildTaskItem(task)),
                   ],
                 ],
               ),
@@ -182,20 +177,60 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
             const SizedBox(height: 48),
             SizedBox(
               width: double.infinity,
-              height: 60,
+              height: 56,
               child: ElevatedButton(
                 onPressed: _isSubmitting ? null : _handleSubmit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
                 child: _isSubmitting 
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('SUBMIT REPORT', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
+                  ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+                  : const Text('SUBMIT DAILY LOG', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1, fontSize: 14)),
               ),
             ),
+            const SizedBox(height: 40),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String label, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: AppTheme.primary.withValues(alpha: 0.7)),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: AppTheme.textMid, letterSpacing: 1.2),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTaskItem(String task) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(color: AppTheme.accent, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(task, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textDark)),
+          ),
+          IconButton(
+            onPressed: () => setState(() => _tasks.remove(task)),
+            icon: const Icon(Icons.close_rounded, size: 18, color: AppTheme.error),
+            style: IconButton.styleFrom(backgroundColor: AppTheme.error.withValues(alpha: 0.1)),
+          ),
+        ],
       ),
     );
   }

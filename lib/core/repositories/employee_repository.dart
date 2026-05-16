@@ -57,7 +57,7 @@ class EmployeeRepository {
   }
 
   Future<void> updateEmployee(Employee employee) async {
-    final url = ApiConfig.employeesUrl; // Upsert uses the base POST endpoint
+    const url = ApiConfig.employeesUrl; // Upsert uses the base POST endpoint
     final body = jsonEncode(employee.toMap());
     debugPrint('📡 [UPSERT] Employee Request: $url');
     debugPrint('📦 Payload: $body');

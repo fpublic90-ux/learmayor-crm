@@ -71,15 +71,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         physics: const BouncingScrollPhysics(),
         slivers: [
           SliverAppBar(
-            expandedHeight: 120,
+            expandedHeight: 80,
             pinned: true,
             stretch: true,
             backgroundColor: AppTheme.background.withOpacity(0.8),
             elevation: 0,
             flexibleSpace: FlexibleSpaceBar(
               stretchModes: const [StretchMode.zoomBackground],
-              titlePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              centerTitle: false,
+              titlePadding: const EdgeInsets.symmetric(horizontal: 1, vertical: 16),
+              centerTitle: true,
               title: Text(
                 'Settings',
                 style: theme.appBarTheme.titleTextStyle,

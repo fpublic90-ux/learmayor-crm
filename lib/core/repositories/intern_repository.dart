@@ -24,7 +24,8 @@ class InternRepository {
       }
       throw Exception('Server error (${response.statusCode})');
     } catch (e) {
-      throw Exception('Server is warming up or connection lost. Please try again.');
+      debugPrint('❌ [ERROR] Intern Fetch Failed: $e');
+      throw Exception('Connection error: ${e.toString()}');
     }
   }
 
@@ -57,7 +58,7 @@ class InternRepository {
   }
 
   Future<void> updateIntern(Intern intern) async {
-    final url = ApiConfig.internsUrl; // Upsert uses the base POST endpoint
+    const url = ApiConfig.internsUrl; // Upsert uses the base POST endpoint
     final body = jsonEncode(intern.toMap());
     debugPrint('📡 [UPSERT] Intern Request: $url');
     debugPrint('📦 Payload: $body');

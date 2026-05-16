@@ -23,12 +23,17 @@ class InternsScreen extends StatefulWidget {
 class _InternsScreenState extends State<InternsScreen> {
   String _searchQuery = '';
   String _selectedDepartment = 'All';
-  InternSortType _sortType = InternSortType.name;
-  bool _isAscending = true;
+  InternSortType _sortType = InternSortType.date;
+  bool _isAscending = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<InternProvider>().fetchInterns();
+      }
+    });
     debugPrint('🎓 [INIT] InternsScreen');
   }
 
@@ -86,7 +91,7 @@ class _InternsScreenState extends State<InternsScreen> {
           headerSliverBuilder: (context, innerBoxIsScrolled) => [
             SliverAppBar(
               centerTitle: false,
-              expandedHeight: 120,
+              expandedHeight: 70,
               pinned: true,
               stretch: true,
               backgroundColor: AppTheme.background.withValues(alpha: 0.8),
@@ -98,13 +103,13 @@ class _InternsScreenState extends State<InternsScreen> {
                 ),
                 const SizedBox(width: 8),
               ],
-              flexibleSpace: FlexibleSpaceBar(
-                stretchModes: const [StretchMode.zoomBackground],
+              flexibleSpace: const FlexibleSpaceBar(
+                stretchModes: [StretchMode.zoomBackground],
                 titlePadding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 centerTitle: true,
                 title: Text(
-                  'Intern Directory',style: TextStyle(fontSize: 20 ),
+                  'Intern Directory',style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)  ,
                  
                 ),  
               ),

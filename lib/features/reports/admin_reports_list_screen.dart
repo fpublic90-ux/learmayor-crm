@@ -34,7 +34,7 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
       lastDate: DateTime.now(),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: ColorScheme.light(
+          colorScheme: const ColorScheme.light(
             primary: AppTheme.accent,
             onPrimary: Colors.white,
             onSurface: AppTheme.textDark,
@@ -68,8 +68,8 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
     final reportProvider = context.watch<ReportProvider>();
     final employeeProvider = context.watch<EmployeeProvider>();
     final internProvider = context.watch<InternProvider>();
-    final employeeIds = employeeProvider.employees.map((e) => e.id.trim()).toSet();
-    final internIds = internProvider.interns.map((i) => i.id.trim()).toSet();
+    final employeeEmails = employeeProvider.employees.map((e) => e.email.toLowerCase().trim()).toSet();
+    final internEmails = internProvider.interns.map((i) => i.email.toLowerCase().trim()).toSet();
     
     // Filter logic
     List<WorkReport> filteredReports = List.from(reportProvider.reports);
@@ -82,9 +82,9 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
     // 2. Role Filter
     if (_filterRole != null && _filterRole != 'ALL') {
       filteredReports = filteredReports.where((r) {
-        final id = r.staffId.trim();
-        if (_filterRole == 'STAFF') return employeeIds.contains(id);
-        if (_filterRole == 'INTERN') return internIds.contains(id);
+        final email = r.staffId.toLowerCase().trim();
+        if (_filterRole == 'STAFF') return employeeEmails.contains(email);
+        if (_filterRole == 'INTERN') return internEmails.contains(email);
         return true;
       }).toList();
     }
@@ -113,7 +113,7 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
       backgroundColor: AppTheme.background,
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
-          SliverAppBar(
+          SliverAppBar(centerTitle: true,
             pinned: true,
             stretch: true,
             backgroundColor: AppTheme.background.withValues(alpha: 0.8),
@@ -127,8 +127,7 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
             title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Performance Analytics', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                Text('Staff Work Log Review', style: theme.textTheme.labelSmall?.copyWith(color: AppTheme.textLight, letterSpacing: 0.5)),
+                Text('Reports',style: TextStyle(fontSize: 35),),
               ],
             ),
           ),
@@ -314,7 +313,7 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
                       child: SlideAnimation(
                         verticalOffset: 30.0,
                         child: FadeInAnimation(
-                          child: _buildReportCard(filteredReports[index], reportProvider, theme),
+                          child: _buildReportCard(context, filteredReports[index], reportProvider, theme),
                         ),
                       ),
                     );
@@ -325,94 +324,108 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
     );
   }
 
-  Widget _buildReportCard(WorkReport report, ReportProvider provider, ThemeData theme) {
+  Widget _buildReportCard(BuildContext context, WorkReport report, ReportProvider provider, ThemeData theme) {
     final statusStr = report.status.toString().split('.').last;
     final statusColor = statusStr == 'approved' ? AppTheme.success : (statusStr == 'rejected' ? AppTheme.error : AppTheme.accent);
     
-    // Determine Role (Safe lookup)
-    final isEmployee = context.read<EmployeeProvider>().employees.any((e) => e.id == report.staffId);
-    final isIntern = !isEmployee && context.read<InternProvider>().interns.any((i) => i.id == report.staffId);
-    final roleLabel = isEmployee ? 'STAFF' : (isIntern ? 'INTERN' : 'OTHER');
+    // Determine Role (Secure Email correlation)
+    final authorEmail = report.staffId.toLowerCase().trim();
+    final isEmployee = context.read<EmployeeProvider>().employees.any((e) => e.email.toLowerCase().trim() == authorEmail);
+    final isIntern = !isEmployee && context.read<InternProvider>().interns.any((i) => i.email.toLowerCase().trim() == authorEmail);
+    final roleLabel = isEmployee ? 'STAFF' : (isIntern ? 'INTERN' : 'NEW');
     final roleColor = isEmployee ? AppTheme.primary : AppTheme.accent;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: BentoCard(
-        isKinetic: true,
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                _buildAvatar(report),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(report.staffName, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900, color: AppTheme.textDark)),
+                      Text(DateFormat('EEEE, MMM dd').format(report.date), style: theme.textTheme.labelSmall?.copyWith(color: AppTheme.textLight)),
+                    ],
+                  ),
+                ),
                 Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Row(
-                      children: [
-                        Text(report.staffName, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: roleColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(roleLabel, style: TextStyle(color: roleColor, fontSize: 8, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: roleColor.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+                      child: Text(roleLabel, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: roleColor, letterSpacing: 0.5)),
                     ),
-                    Text(DateFormat('MMM dd, yyyy').format(report.date), style: theme.textTheme.bodySmall),
+                    const SizedBox(height: 6),
+                    Text('${report.hoursWorked}h Worked', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w900, color: AppTheme.primary)),
                   ],
                 ),
-                StatusBadge(label: statusStr.toUpperCase(), color: statusColor),
               ],
             ),
-            const SizedBox(height: 16),
-            Text(report.description, style: theme.textTheme.bodyMedium),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: report.tasks.map((t) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: AppTheme.divider, borderRadius: BorderRadius.circular(6)),
-                child: Text('#$t', style: const TextStyle(fontSize: 10, color: AppTheme.textMid, fontWeight: FontWeight.bold)),
-              )).toList(),
-            ),
-            if (report.status == ReportStatus.pending) ...[
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => _handleStatusUpdate(provider, report.id, ReportStatus.rejected),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.error,
-                        side: const BorderSide(color: AppTheme.error),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+            const Divider(height: 32, color: AppTheme.divider),
+            Text(report.description, style: theme.textTheme.bodyMedium?.copyWith(color: AppTheme.textDark, height: 1.5)),
+            if (report.tasks.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: report.tasks.map((t) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Icon(Icons.circle, size: 4, color: AppTheme.primary.withValues(alpha: 0.5)),
                       ),
-                      child: const Text('REJECT'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => _handleStatusUpdate(provider, report.id, ReportStatus.approved),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.success,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(t, style: theme.textTheme.bodySmall?.copyWith(color: AppTheme.textMid, fontWeight: FontWeight.w600)),
                       ),
-                      child: const Text('APPROVE'),
-                    ),
+                    ],
                   ),
-                ],
+                )).toList(),
               ),
             ],
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                StatusBadge(label: statusStr.toUpperCase(), color: statusColor),
+                if (report.status == ReportStatus.pending) 
+                  Row(
+                    children: [
+                      _buildActionButton('REJECT', AppTheme.error, () => _handleStatusUpdate(provider, report.id, ReportStatus.rejected), isOutline: true),
+                      const SizedBox(width: 8),
+                      _buildActionButton('APPROVE', AppTheme.success, () => _handleStatusUpdate(provider, report.id, ReportStatus.approved)),
+                    ],
+                  ),
+              ],
+            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvatar(WorkReport report) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.1),
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          report.staffName.isNotEmpty ? report.staffName[0].toUpperCase() : '?',
+          style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold, fontSize: 18),
         ),
       ),
     );
@@ -442,8 +455,34 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
           ),
         ),
         if (isSelected)
-          Icon(Icons.check_rounded, size: 18, color: AppTheme.success),
+          const Icon(Icons.check_rounded, size: 18, color: AppTheme.success),
       ],
+    );
+  }
+
+  Widget _buildActionButton(String label, Color color, VoidCallback onTap, {bool isOutline = false}) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        onTap();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isOutline ? Colors.transparent : color,
+          borderRadius: BorderRadius.circular(10),
+          border: isOutline ? Border.all(color: color.withValues(alpha: 0.5)) : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isOutline ? color : Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
     );
   }
 }

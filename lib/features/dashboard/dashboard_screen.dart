@@ -44,7 +44,7 @@ class DashboardScreen extends StatelessWidget {
     final isLoading = employeeProvider.isLoading || internProvider.isLoading || attendanceProvider.isLoading;
     final allUsers = auth.allUsers;
 
-    // Precision Filtering: Find users who are registered but not yet onboarded
+    // Relational Diagnostics: Identifying pending sign-ups across the system
     final onboardedEmails = {
       ...employeeProvider.employees.map((e) => e.email.toLowerCase().trim()),
       ...internProvider.interns.map((i) => i.email.toLowerCase().trim()),
@@ -52,16 +52,16 @@ class DashboardScreen extends StatelessWidget {
     
     final pendingUsers = allUsers.where((u) {
       final email = u['email']?.toString().toLowerCase().trim();
-      // 1. Must have a valid email
       if (email == null || email.isEmpty || email == 'null') return false;
-      // 2. Must NOT be the current logged-in user
-      if (email == auth.userEmail?.toLowerCase().trim()) return false;
-      // 3. Must NOT be already onboarded
-      if (onboardedEmails.contains(email)) return false;
-      // 4. Must be a staff role (employee or intern)
-      final role = u['role']?.toString().toLowerCase();
-      return role == 'employee' || role == 'intern';
+      
+      final isSelf = email == auth.userEmail?.toLowerCase().trim();
+      final isAlreadyOnboarded = onboardedEmails.contains(email);
+      
+      // We are looking for any user who is NOT the admin and NOT yet officially onboarded
+      return !isSelf && !isAlreadyOnboarded;
     }).toList();
+
+    debugPrint('📊 [DASHBOARD] Sync: ${allUsers.length} total users, ${pendingUsers.length} pending onboarding');
 
     return Scaffold(
       backgroundColor: AppTheme.background,

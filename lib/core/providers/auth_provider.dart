@@ -54,10 +54,11 @@ class AuthProvider extends ChangeNotifier {
     
     // Determine role based on email or saved role
     final savedRole = prefs.getString('user_role');
-    if (_userEmail == 'jafarevx123@gmail.com') {
-      _role = UserRole.admin;
-    } else if (savedRole != null) {
+    // Determine role based on saved state
+    if (savedRole != null) {
       _role = UserRole.values.firstWhere((e) => e.name == savedRole, orElse: () => UserRole.employee);
+    } else if (_userEmail == 'jafarevx123@gmail.com') {
+      _role = UserRole.admin; // Emergency fallback for root admin
     } else {
       _role = UserRole.employee;
     }
@@ -117,15 +118,17 @@ class AuthProvider extends ChangeNotifier {
             _userName = data['name'];
             _userEmail = data['email'];
             
-            if (_userEmail == 'jafarevx123@gmail.com') {
-              _role = UserRole.admin;
-            } else if (manualRole != null) {
-              _role = manualRole;
-            } else {
+            if (data['role'] != null) {
               _role = UserRole.values.firstWhere(
                 (e) => e.name == data['role'], 
                 orElse: () => UserRole.employee
               );
+            } else if (_userEmail == 'jafarevx123@gmail.com') {
+              _role = UserRole.admin;
+            } else if (manualRole != null) {
+              _role = manualRole;
+            } else {
+              _role = UserRole.employee;
             }
             
             final prefs = await SharedPreferences.getInstance();
@@ -267,10 +270,15 @@ class AuthProvider extends ChangeNotifier {
       final response = await http.get(
         Uri.parse('${ApiConfig.baseUrl}/auth/users'),
         headers: {'Authorization': 'Bearer $_token'},
-      ).timeout(const Duration(seconds: 5)); // 5-second Executive Timeout
+      ).timeout(const Duration(seconds: 15));
+      
+      debugPrint('📡 Auth: Users Sync Status: ${response.statusCode}');
+      
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         _allUsers = data.cast<Map<String, dynamic>>();
+      } else {
+        debugPrint('❌ Auth: Users Sync Failed (${response.statusCode}): ${response.body}');
       }
     } catch (e) {
       debugPrint('Error fetching users: $e');
@@ -301,6 +309,38 @@ class AuthProvider extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Error deleting user: $e');
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // Authoritatively update a user's role (Admin only)
+  Future<bool> updateUserRole(String email, UserRole role) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final response = await http.put(
+        Uri.parse('${ApiConfig.baseUrl}/auth/users/$email/role'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_token',
+        },
+        body: jsonEncode({'role': role.name}),
+      ).timeout(const Duration(seconds: 10));
+      
+      if (response.statusCode == 200) {
+        debugPrint('✅ Auth: Role for $email updated to ${role.name}');
+        await fetchAllUsers(); // Refresh the list
+        return true;
+      } else {
+        final data = jsonDecode(response.body);
+        debugPrint('❌ Auth: Role update failed: ${data['error']}');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Error updating role: $e');
       return false;
     } finally {
       _isLoading = false;
