@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:learnyor_hrm/core/providers/attendance_provider.dart';
 import 'package:learnyor_hrm/core/providers/employee_provider.dart';
 import 'package:learnyor_hrm/core/providers/intern_provider.dart';
+import 'package:learnyor_hrm/core/providers/notification_provider.dart';
 import 'package:learnyor_hrm/core/widgets/premium_widgets.dart';
 import 'package:provider/provider.dart';
 import 'theme.dart';
@@ -253,6 +254,14 @@ class _ShellLayoutState extends State<ShellLayout>
               ),
 
               _BottomNavItem(
+                icon: Icons.notifications_rounded,
+                label: 'Alerts',
+                isSelected: location == '/notifications',
+                badgeCount: context.watch<NotificationProvider>().unreadCount,
+                onTap: () { if (location != '/notifications') context.push('/notifications'); },
+              ),
+              
+              _BottomNavItem(
                 icon: Icons.settings_rounded,
                 label: 'Settings',
                 isSelected: location == '/settings',
@@ -271,6 +280,7 @@ class _BottomNavItem extends StatelessWidget {
   final String label;
   final bool isSelected;
   final bool isPremium;
+  final int badgeCount;
   final VoidCallback onTap;
 
   const _BottomNavItem({
@@ -278,6 +288,7 @@ class _BottomNavItem extends StatelessWidget {
     required this.label,
     required this.isSelected,
     this.isPremium = false,
+    this.badgeCount = 0,
     required this.onTap,
   });
 
@@ -312,12 +323,32 @@ class _BottomNavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              color: isPremium 
-                  ? Colors.white 
-                  : (isSelected ? AppTheme.primary : AppTheme.textLight),
-              size: isPremium ? 26 : 20,
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  icon,
+                  color: isPremium 
+                      ? Colors.white 
+                      : (isSelected ? AppTheme.primary : AppTheme.textLight),
+                  size: isPremium ? 26 : 20,
+                ),
+                if (badgeCount > 0)
+                  Positioned(
+                    top: -4,
+                    right: -4,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(color: AppTheme.error, shape: BoxShape.circle),
+                      constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                      child: Text(
+                        badgeCount > 9 ? '9+' : '$badgeCount',
+                        style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             if (!isPremium) ...[
               const SizedBox(height: 4),

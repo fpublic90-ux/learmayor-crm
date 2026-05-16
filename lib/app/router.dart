@@ -1,4 +1,5 @@
 import 'package:go_router/go_router.dart';
+import 'package:learnyor_hrm/features/notifications/notification_screen.dart';
 import '../core/providers/auth_provider.dart';
 import '../features/auth/login_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
@@ -87,6 +88,7 @@ class AppRouter {
             GoRoute(path: '/reports/leave', builder: (_, __) => const AdminLeaveListScreen()),
             GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
             GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingVaultScreen()),
+            GoRoute(path: '/notifications', builder: (_, __) => const NotificationScreen()),
 
             // Staff Portal Specific Routes
             GoRoute(path: '/staff/hub', builder: (_, __) => const StaffHubScreen()),

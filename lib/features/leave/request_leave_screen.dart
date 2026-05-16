@@ -60,16 +60,26 @@ class _RequestLeaveScreenState extends State<RequestLeaveScreen> {
       Globals.showSnackBar('Please select dates', isError: true);
       return;
     }
-    if (_reasonController.text.trim().isEmpty) {
-      Globals.showSnackBar('Please provide a reason', isError: true);
+    final auth = context.read<AuthProvider>();
+    final provider = context.read<LeaveProvider>();
+
+    // 1. DUPLICATE/OVERLAP CHECK
+    final hasOverlap = provider.leaveRequests.any((r) {
+      if (r.status == LeaveStatus.rejected) return false;
+      
+      // Check if dates overlap: (StartA <= EndB) and (EndA >= StartB)
+      final overlap = (r.startDate.isBefore(_selectedRange!.end) || r.startDate.isAtSameMomentAs(_selectedRange!.end)) &&
+                      (r.endDate.isAfter(_selectedRange!.start) || r.endDate.isAtSameMomentAs(_selectedRange!.start));
+      return overlap;
+    });
+
+    if (hasOverlap) {
+      Globals.showSnackBar('You already have a pending or approved request for these dates', isError: true);
       return;
     }
 
     setState(() => _isSubmitting = true);
     
-    final auth = context.read<AuthProvider>();
-    final provider = context.read<LeaveProvider>();
-
     final request = LeaveRequest(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       staffId: auth.userEmail ?? 'anonymous',
@@ -87,16 +97,48 @@ class _RequestLeaveScreenState extends State<RequestLeaveScreen> {
       result.when(
         onSuccess: (_) {
           Globals.showSnackBar('Leave request submitted successfully');
-          context.pop();
+          _reasonController.clear();
+          setState(() => _selectedRange = null);
         },
         onFailure: (e) => Globals.showSnackBar('Submission failed: ${e.toString()}', isError: true),
       );
     }
   }
 
+  Future<void> _handleCancel(LeaveRequest request) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => PremiumConfirmationDialog(
+      title: 'Cancel Leave Request?',
+      message:
+          'Are you sure you want to cancel this leave request?',
+      confirmLabel: 'Cancel Request',
+      confirmColor: AppTheme.error,
+      icon: Icons.cancel_rounded,
+    ),
+  );
+
+  if (confirmed == true && mounted) {
+    final result = await context
+        .read<LeaveProvider>()
+        .cancelLeaveRequest(request.id);
+
+    result.when(
+      onSuccess: (_) => Globals.showSnackBar(
+        'Leave request cancelled successfully',
+      ),
+      onFailure: (e) => Globals.showSnackBar(
+        'Failed to cancel request: ${e.toString()}',
+        isError: true,
+      ),
+    );
+  }
+}
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final provider = context.watch<LeaveProvider>();
     
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -173,11 +215,174 @@ class _RequestLeaveScreenState extends State<RequestLeaveScreen> {
                 onPressed: _handleSubmit,
               ),
             ),
+
+            const SizedBox(height: 48),
+            _buildSectionHeader('MY REQUESTS'),
+            const SizedBox(height: 16),
+            _buildHistoryList(context, provider),
           ],
         ),
       ),
     );
   }
+
+  Widget _buildHistoryList(BuildContext context, LeaveProvider provider) {
+    final myLeaves = provider.leaveRequests;
+    
+    if (provider.isLoading && myLeaves.isEmpty) {
+      return const Center(child: Padding(
+        padding: EdgeInsets.all(24),
+        child: CircularProgressIndicator(strokeWidth: 2),
+      ));
+    }
+
+    if (myLeaves.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: const Center(
+          child: Column(
+            children: [
+              Icon(Icons.event_busy_rounded, color: AppTheme.textLight, size: 32),
+              SizedBox(height: 12),
+              Text('No leave history found', style: TextStyle(color: AppTheme.textLight, fontSize: 13)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: myLeaves.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, index) => _buildLeaveRequestCard(myLeaves[index]),
+    );
+  }
+
+ Widget _buildLeaveRequestCard(LeaveRequest request) {
+  final isPending = request.status == LeaveStatus.pending;
+  final isApproved = request.status == LeaveStatus.approved;
+
+  final statusColor = isApproved
+      ? AppTheme.success
+      : (isPending ? AppTheme.warning : AppTheme.error);
+
+  return BentoCard(
+    padding: const EdgeInsets.all(18),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${DateFormat('MMM dd').format(request.startDate)}'
+                    ' - '
+                    '${DateFormat('MMM dd').format(request.endDate)}',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.textDark,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  Row(
+                    children: [
+                      StatusBadge(
+                        label: request.status.name.toUpperCase(),
+                        color: statusColor,
+                      ),
+
+                      const SizedBox(width: 10),
+
+                      Text(
+                        '${request.durationInDays} day(s)',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textMid,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            if (isPending)
+              TextButton.icon(
+                onPressed: () => _handleCancel(request),
+                style: TextButton.styleFrom(
+                  backgroundColor:
+                      AppTheme.error.withOpacity(0.08),
+                  foregroundColor: AppTheme.error,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(
+                  Icons.close_rounded,
+                  size: 16,
+                ),
+                label: const Text(
+                  'Cancel',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+          ],
+        ),
+
+        const SizedBox(height: 16),
+
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppTheme.background,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: AppTheme.border.withOpacity(0.5),
+            ),
+          ),
+          child: Text(
+            request.reason.isEmpty
+                ? 'No reason provided'
+                : request.reason,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 13,
+              height: 1.5,
+              color: AppTheme.textMid,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildSectionHeader(String title) {
     return Text(

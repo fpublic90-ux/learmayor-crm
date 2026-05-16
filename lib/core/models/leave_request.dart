@@ -14,6 +14,8 @@ class LeaveRequest {
   final LeaveType type;
   final DateTime createdAt;
 
+  int get durationInDays => endDate.difference(startDate).inDays + 1;
+
   LeaveRequest({
     required this.id,
     required this.staffId,

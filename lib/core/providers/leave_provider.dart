@@ -77,4 +77,14 @@ class LeaveProvider extends ChangeNotifier {
       return Failure(Exception(e.toString()));
     }
   }
+
+  Future<Result<void, Exception>> cancelLeaveRequest(String id) async {
+    try {
+      await _repository.deleteLeaveRequest(id);
+      fetchLeaveRequests(); // Silent background sync
+      return const Success(null);
+    } catch (e) {
+      return Failure(Exception(e.toString()));
+    }
+  }
 }

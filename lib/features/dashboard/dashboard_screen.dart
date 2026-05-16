@@ -324,22 +324,45 @@ class DashboardScreen extends StatelessWidget {
             Expanded(child: _buildActionTile(context, 'Onboard Intern', Icons.school_rounded, AppTheme.accent, () => context.push('/interns/add'), theme)),
           ],
         ),
+        const SizedBox(height: 16),
+        _buildActionTile(
+          context, 
+          'Manage Leave Requests', 
+          Icons.event_note_rounded, 
+          AppTheme.primary, 
+          () => context.push('/reports/leave'), 
+          theme,
+          isFullWidth: true,
+        ),
       ],
     );
   }
 
-  Widget _buildActionTile(BuildContext context, String t, IconData i, Color c, VoidCallback onTap, ThemeData theme) {
+  Widget _buildActionTile(BuildContext context, String t, IconData i, Color c, VoidCallback onTap, ThemeData theme, {bool isFullWidth = false}) {
     return BentoCard(
       isKinetic: true,
       onTap: () { HapticFeedback.mediumImpact(); onTap(); },
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-      child: Column(
-        children: [
-          Icon(i, color: c, size: 28),
-          const SizedBox(height: 12),
-          Text(t, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: AppTheme.textDark)),
-        ],
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
+      child: isFullWidth 
+        ? Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: c.withOpacity(0.08), borderRadius: BorderRadius.circular(16)),
+                child: Icon(i, color: c, size: 28),
+              ),
+              const SizedBox(width: 20),
+              Expanded(child: Text(t, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: AppTheme.textDark))),
+              const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textLight),
+            ],
+          )
+        : Column(
+            children: [
+              Icon(i, color: c, size: 28),
+              const SizedBox(height: 12),
+              Text(t, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: AppTheme.textDark)),
+            ],
+          ),
     );
   }
 
