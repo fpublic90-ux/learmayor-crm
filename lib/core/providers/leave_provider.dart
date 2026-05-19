@@ -6,7 +6,7 @@ import '../utils/result.dart';
 class LeaveProvider extends ChangeNotifier {
   LeaveRepository _repository = LeaveRepository();
   List<LeaveRequest> _leaveRequests = [];
-  bool _isLoading = false;
+  bool _isLoading = false; 
   String? _errorMessage;
   String? _token;
 

@@ -67,7 +67,7 @@ class InternDetailScreen extends StatelessWidget {
             margin: const EdgeInsets.only(right: 16),
             decoration: BoxDecoration(color: AppTheme.error.withOpacity(0.06), borderRadius: BorderRadius.circular(12)),
             child: IconButton(
-              icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.error, size: 20),
+              icon: Icon(Icons.delete_outline_rounded, color: AppTheme.error, size: 20),
               onPressed: () => _showDeleteDialog(context, intern),
             ),
           ),
@@ -87,7 +87,7 @@ class InternDetailScreen extends StatelessWidget {
                       width: double.infinity,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(28),
-                        gradient: const LinearGradient(
+                        gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [AppTheme.primarySubtle, AppTheme.background],
@@ -351,7 +351,7 @@ class _AttendanceSection extends StatelessWidget {
             ListView.separated(
               shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
               itemCount: records.length.clamp(0, 5),
-              separatorBuilder: (_, __) => const Divider(height: 24, color: AppTheme.divider),
+              separatorBuilder: (_, __) => Divider(height: 24, color: AppTheme.divider),
               itemBuilder: (context, index) {
                 final r = records[index];
                 return Row(

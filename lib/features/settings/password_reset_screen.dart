@@ -59,7 +59,7 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('CHANGE PASSWORD', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textMid, letterSpacing: 1.2)),
+            Text('CHANGE PASSWORD', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textMid, letterSpacing: 1.2)),
             const SizedBox(height: 12),
             BentoCard(
               child: Column(
@@ -107,8 +107,8 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-            const Padding(
+            SizedBox(height: 24),
+            Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
               child: Text(
                 'Tip: Use a strong password with a mix of letters, numbers, and symbols.',

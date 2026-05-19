@@ -30,7 +30,7 @@ class Employee {
     required this.address,
     this.photoUrl,
     this.status = 'active',
-  }) : id = id ?? _uuid.v4();
+  }) : id = (id == null || id.isEmpty) ? _uuid.v4() : id;
 
   // Converts the Employee object into a JSON-compatible Map for storage
   Map<String, dynamic> toMap() => {
@@ -48,21 +48,31 @@ class Employee {
       };
 
   // Factory constructor to create an Employee object from a Map (e.g., from a database)
-  factory Employee.fromMap(Map<String, dynamic> map) => Employee(
-        id: (map['id'] ?? map['_id'] ?? '').toString(),
-        name: map['name'] ?? '',
-        email: map['email'] ?? '',
-        phone: map['phone'] ?? '',
-        designation: map['designation'] ?? '',
-        department: map['department'] ?? '',
-        // Handle potentially invalid date strings gracefully
-        joiningDate: DateTime.tryParse(map['joiningDate'] ?? '') ?? DateTime.now(),
-        // Ensure salary is treated as a double
-        salary: (map['salary'] ?? 0).toDouble(),
-        address: map['address'] ?? '',
-        photoUrl: map['photoUrl'],
-        status: map['status'] ?? 'active',
-      );
+  factory Employee.fromMap(Map<String, dynamic> map) {
+    // Robust Identity Resolution: Fallback chain for various backend implementations
+    String resolvedId = (map['id']?.toString() ?? '');
+    if (resolvedId.isEmpty) resolvedId = (map['_id']?.toString() ?? '');
+    if (resolvedId.isEmpty) {
+      resolvedId = _uuid.v4(); // Last resort for local stability
+    }
+
+    return Employee(
+      id: resolvedId,
+      name: map['name'] ?? '',
+      email: map['email'] ?? '',
+      phone: map['phone'] ?? '',
+      designation: map['designation'] ?? '',
+      department: map['department'] ?? '',
+      // Handle potentially invalid date strings gracefully
+      joiningDate:
+          DateTime.tryParse(map['joiningDate'] ?? '') ?? DateTime.now(),
+      // Ensure salary is treated as a double
+      salary: (map['salary'] ?? 0).toDouble(),
+      address: map['address'] ?? '',
+      photoUrl: map['photoUrl'],
+      status: map['status'] ?? 'active',
+    );
+  }
 
   // Creates a copy of the current Employee with some updated fields
   Employee copyWith({
@@ -90,4 +100,4 @@ class Employee {
         photoUrl: photoUrl ?? this.photoUrl,
         status: status ?? this.status,
       );
-}
+ }

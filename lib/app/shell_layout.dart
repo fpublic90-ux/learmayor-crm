@@ -107,7 +107,7 @@ class _ShellLayoutState extends State<ShellLayout>
     } catch (_) {}
 
     if (latestName != null && latestName != auth.userName) {
-      final nameToSync = latestName!; // Shadow to non-nullable for closure capture
+      final nameToSync = latestName; // Shadow to non-nullable for closure capture
       Future.microtask(() {
         debugPrint('🔄 Auth Sync: Updating local name to $nameToSync');
         auth.refreshLocalProfile(name: nameToSync);
@@ -130,7 +130,7 @@ class _ShellLayoutState extends State<ShellLayout>
     final isDesktop = size.width > 900;
 
     return Scaffold(
-      backgroundColor: isDesktop ? const Color(0xFFF1F5F9) : AppTheme.background,
+      backgroundColor: isDesktop ? Color(0xFFF1F5F9) : AppTheme.background,
       body: Center(
         child: Container(
           width: isDesktop ? 450 : double.infinity,
@@ -202,71 +202,81 @@ class _ShellLayoutState extends State<ShellLayout>
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               // Home Nav (Changes based on Role)
-              _BottomNavItem(
-                icon: Icons.dashboard_rounded,
-                label: 'Home',
-                isSelected: location == '/dashboard' || location == '/staff/hub',
-                onTap: () => context.go(auth.isAdmin ? '/dashboard' : '/staff/hub'),
+              Expanded(
+                child: _BottomNavItem(
+                  icon: Icons.dashboard_rounded,
+                  label: 'Home',
+                  isSelected: location == '/dashboard' || location == '/staff/hub',
+                  onTap: () => context.go(auth.isAdmin ? '/dashboard' : '/staff/hub'),
+                ),
               ),
               
               // Staff only visible to Admin
               if (auth.isAdmin)
-                _BottomNavItem(
-                  icon: Icons.people_alt_rounded,
-                  label: 'Staff',
-                  isSelected: location.startsWith('/employees'),
-                  onTap: () { if (location != '/employees') context.go('/employees'); },
+                Expanded(
+                  child: _BottomNavItem(
+                    icon: Icons.people_alt_rounded,
+                    label: 'Staff',
+                    isSelected: location.startsWith('/employees'),
+                    onTap: () { if (location != '/employees') context.go('/employees'); },
+                  ),
                 ),
                 
-              _BottomNavItem(
-                icon: Icons.calendar_today_rounded,
-                label: 'Attendance',
-                isSelected: location.startsWith('/attendance'),
-                onTap: () { if (location != '/attendance') context.go('/attendance'); },
+              Expanded(
+                child: _BottomNavItem(
+                  icon: Icons.calendar_today_rounded,
+                  label: 'Attendance',
+                  isSelected: location.startsWith('/attendance'),
+                  onTap: () { if (location != '/attendance') context.go('/attendance'); },
+                ),
               ),
               
               if (!auth.isAdmin && auth.isLoggedIn)
-                _BottomNavItem(
-                  icon: Icons.add_rounded,
-                  label: 'Add',
-                  isSelected: location == '/staff/report/add',
-                  isPremium: true,
-                  onTap: () => context.push('/staff/report/add'),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left:12, right:1),
+                    child: _BottomNavItem(
+                      icon: Icons.add_rounded,
+                      label: 'Add',
+                      isSelected: location == '/staff/report/add',
+                      isPremium: true,
+                      onTap: () => context.push('/staff/report/add'),
+                    ),
+                  ),
                 ),
 
               // Interns only visible to Admin
               if (auth.isAdmin)
-                _BottomNavItem(
-                  icon: Icons.school_rounded,
-                  label: 'Interns',
-                  isSelected: location.startsWith('/interns'),
-                  onTap: () { if (location != '/interns') context.go('/interns'); },
+                Expanded(
+                  child: _BottomNavItem(
+                    icon: Icons.school_rounded,
+                    label: 'Interns',
+                    isSelected: location.startsWith('/interns'),
+                    onTap: () { if (location != '/interns') context.go('/interns'); },
+                  ),
                 ),
                 
-              _BottomNavItem(
-                icon: Icons.analytics_rounded,
-                label: auth.isAdmin ? 'Reports' : 'Logs',
-                isSelected: location.startsWith('/reports'),
-                onTap: () { 
-                  final target = auth.isAdmin ? '/reports/admin' : '/reports';
-                  if (location != target) context.go(target); 
-                },
+              Expanded(
+                child: _BottomNavItem(
+                  icon: Icons.analytics_rounded,
+                  label: auth.isAdmin ? 'Reports' : 'Logs',
+                  isSelected: location.startsWith('/reports'),
+                  onTap: () { 
+                    final target = auth.isAdmin ? '/reports/admin' : '/reports';
+                    if (location != target) context.go(target); 
+                  },
+                ),
               ),
 
-              _BottomNavItem(
-                icon: Icons.notifications_rounded,
-                label: 'Alerts',
-                isSelected: location == '/notifications',
-                badgeCount: context.watch<NotificationProvider>().unreadCount,
-                onTap: () { if (location != '/notifications') context.push('/notifications'); },
-              ),
-              
-              _BottomNavItem(
-                icon: Icons.settings_rounded,
-                label: 'Settings',
-                isSelected: location == '/settings',
-                onTap: () { if (location != '/settings') context.go('/settings'); },
-              ),
+              if (!auth.isAdmin && auth.isLoggedIn)
+                Expanded(
+                  child: _BottomNavItem(
+                    icon: Icons.history_rounded,
+                    label: 'Leaves',
+                    isSelected: location.startsWith('/staff/leave'),
+                    onTap: () { if (location != '/staff/leave/list') context.go('/staff/leave/list'); },
+                  ),
+                ),
             ],
           ),
         ),
@@ -280,7 +290,6 @@ class _BottomNavItem extends StatelessWidget {
   final String label;
   final bool isSelected;
   final bool isPremium;
-  final int badgeCount;
   final VoidCallback onTap;
 
   const _BottomNavItem({
@@ -288,7 +297,6 @@ class _BottomNavItem extends StatelessWidget {
     required this.label,
     required this.isSelected,
     this.isPremium = false,
-    this.badgeCount = 0,
     required this.onTap,
   });
 
@@ -310,8 +318,8 @@ class _BottomNavItem extends StatelessWidget {
           color: isPremium 
               ? AppTheme.accent 
               : (isSelected ? AppTheme.primary.withOpacity(0.1) : Colors.transparent),
-          shape: isPremium ? BoxShape.circle : BoxShape.rectangle,
-          borderRadius: isPremium ? null : BorderRadius.circular(12),
+          shape: BoxShape.rectangle,
+          borderRadius: BorderRadius.circular(isPremium ? 100 : 12),
           boxShadow: isPremium ? [
             BoxShadow(
               color: AppTheme.accent.withOpacity(0.3),
@@ -323,32 +331,12 @@ class _BottomNavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Icon(
-                  icon,
-                  color: isPremium 
-                      ? Colors.white 
-                      : (isSelected ? AppTheme.primary : AppTheme.textLight),
-                  size: isPremium ? 26 : 20,
-                ),
-                if (badgeCount > 0)
-                  Positioned(
-                    top: -4,
-                    right: -4,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(color: AppTheme.error, shape: BoxShape.circle),
-                      constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
-                      child: Text(
-                        badgeCount > 9 ? '9+' : '$badgeCount',
-                        style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-              ],
+            Icon(
+              icon,
+              color: isPremium 
+                  ? Colors.white 
+                  : (isSelected ? AppTheme.primary : AppTheme.textLight),
+              size: isPremium ? 26 : 20,
             ),
             if (!isPremium) ...[
               const SizedBox(height: 4),

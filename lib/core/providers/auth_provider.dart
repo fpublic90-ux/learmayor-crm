@@ -6,7 +6,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import '../config/api_config.dart';
-import '../../app/globals.dart';
 
 enum UserRole { admin, employee, intern }
 
@@ -359,18 +358,23 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    // Phase 1: Synchronous Invalidation (Total UI Stop)
     _token = null;
     _userName = null;
     _userEmail = null;
     _isDemoUser = false;
+    _role = UserRole.employee; // Reset to default
     
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('jwt_token');
-    await prefs.remove('user_name');
-    await prefs.remove('user_email');
-    await prefs.remove('is_demo');
-    
-    Globals.showSnackBar('Logout Successful. See you soon!');
+    // Notify UI immediately to trigger redirection before async disk I/O
     notifyListeners();
+
+    // Phase 2: Asynchronous Persistence Teardown (Clean Background)
+    try {
+      await _storage.deleteAll(); // Clear secure JWT
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear(); // Total wipe for safety
+    } catch (e) {
+      debugPrint('⚠️ Auth: Storage cleanup error: $e');
+    }
   }
 }

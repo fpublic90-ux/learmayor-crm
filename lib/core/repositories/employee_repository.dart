@@ -29,20 +29,28 @@ class EmployeeRepository {
   }
 
   Future<String?> uploadImage(XFile image) async {
-    final request = http.MultipartRequest('POST', Uri.parse(ApiConfig.uploadUrl));
-    if (token != null) request.headers['Authorization'] = 'Bearer $token';
-    
-    if (kIsWeb) {
-      request.files.add(http.MultipartFile.fromBytes('image', await image.readAsBytes(), filename: image.name));
-    } else {
-      request.files.add(await http.MultipartFile.fromPath('image', image.path));
+    try {
+      final request = http.MultipartRequest('POST', Uri.parse(ApiConfig.uploadUrl));
+      if (token != null) request.headers['Authorization'] = 'Bearer $token';
+      
+      if (kIsWeb) {
+        request.files.add(http.MultipartFile.fromBytes('image', await image.readAsBytes(), filename: image.name));
+      } else {
+        request.files.add(await http.MultipartFile.fromPath('image', image.path));
+      }
+      
+      // Execute request with authoritative timeout governance
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 45));
+      final response = await http.Response.fromStream(streamedResponse);
+      
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body)['imageUrl'];
+      }
+      throw Exception('Image upload failed (${response.statusCode})');
+    } catch (e) {
+      debugPrint('🚨 [NETWORK] Upload Error: $e');
+      throw Exception('Could not reach image server. Please check your connection.');
     }
-    final response = await request.send();
-    if (response.statusCode == 200) {
-      final respStr = await response.stream.bytesToString();
-      return jsonDecode(respStr)['imageUrl'];
-    }
-    return null;
   }
 
   Future<void> addEmployee(Employee employee) async {
@@ -66,9 +74,9 @@ class EmployeeRepository {
       Uri.parse(url),
       headers: _headers,
       body: body,
-    ).timeout(const Duration(seconds: 15));
+    ).timeout(const Duration(seconds: 45));
     
-    debugPrint('📥 [UPSERT] Employee Response (${response.statusCode}): ${response.body}');
+    debugPrint('📥 [UPSERT] Employee Response (${response.statusCode})');
     
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw Exception('Update failed (Status: ${response.statusCode})');
@@ -82,7 +90,7 @@ class EmployeeRepository {
     final response = await http.delete(
       Uri.parse(url), 
       headers: _headers
-    ).timeout(const Duration(seconds: 15));
+    ).timeout(const Duration(seconds: 45));
     
     debugPrint('📥 [DELETE] Employee Response (${response.statusCode})');
     

@@ -94,13 +94,13 @@ class _OnboardingVaultScreenState extends State<OnboardingVaultScreen> {
         actions: [
           IconButton(
             onPressed: _loadPendingUsers, 
-            icon: const Icon(Icons.refresh_rounded, color: AppTheme.primary)
+            icon: Icon(Icons.refresh_rounded, color: AppTheme.primary)
           ),
           const SizedBox(width: 8),
         ],
       ),
       body: _isLoading 
-        ? const Center(child: CircularProgressIndicator(color: AppTheme.accent))
+        ? Center(child: CircularProgressIndicator(color: AppTheme.accent))
         : _pendingUsers.isEmpty
           ? RefreshIndicator(
               onRefresh: _loadPendingUsers,
@@ -139,7 +139,7 @@ class _OnboardingVaultScreenState extends State<OnboardingVaultScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: AppTheme.accent.withOpacity(0.1), shape: BoxShape.circle),
-              child: const Icon(Icons.person_outline_rounded, color: AppTheme.accent),
+              child: Icon(Icons.person_outline_rounded, color: AppTheme.accent),
             ),
             const SizedBox(width: 20),
             Expanded(
@@ -153,7 +153,7 @@ class _OnboardingVaultScreenState extends State<OnboardingVaultScreen> {
             ),
             IconButton(
               onPressed: () => _handleDeleteUser(user['email']),
-              icon: const Icon(Icons.delete_outline_rounded, color: AppTheme.error),
+              icon: Icon(Icons.delete_outline_rounded, color: AppTheme.error),
               tooltip: 'Delete User Account',
             ),
             const SizedBox(width: 8),

@@ -78,4 +78,18 @@ class NotificationProvider extends ChangeNotifier {
       debugPrint('❌ Failed to mark all notifications read: $e');
     }
   }
+
+  Future<void> deleteNotification(String id) async {
+    try {
+      // Optimistic Update: Remove from list immediately to prevent Dismissible crashes
+      _notifications.removeWhere((n) => n.id == id);
+      notifyListeners();
+      
+      await _repository.deleteNotification(id);
+    } catch (e) {
+      debugPrint('❌ Failed to delete notification: $e');
+      // Re-fetch to recover state if server deletion fails
+      fetchNotifications();
+    }
+  }
 }

@@ -105,7 +105,7 @@ class _AddEditInternScreenState extends State<AddEditInternScreen> {
       if (finalPhotoUrl == null) {
         if (mounted) {
           setState(() => _isLoading = false);
-          Globals.showSnackBar('Photo upload failed', isError: true);
+          Globals.showPremiumError('Structural failure during photo upload.');
         }
         return;
       }
@@ -144,7 +144,7 @@ class _AddEditInternScreenState extends State<AddEditInternScreen> {
             debugPrint('✅ Success Path. Buffering Screen Exit...');
             // Background Sync: Trigger refresh but don't wait for it
             context.read<AuthProvider>().fetchAllUsers();
-            Globals.showSnackBar(_isEdit ? 'Intern Updated' : 'Intern Registered');
+            Globals.showPremiumSuccess(_isEdit ? 'Executive record updated' : 'New intern registered');
             
             // Post-Frame Navigation: Ensure dialog is fully gone before popping screen
             Future.delayed(const Duration(milliseconds: 100), () {
@@ -156,7 +156,7 @@ class _AddEditInternScreenState extends State<AddEditInternScreen> {
           },
           onFailure: (e) {
             debugPrint('❌ Failure Path: $e');
-            Globals.showSnackBar(e.toString(), isError: true);
+            Globals.showPremiumError(e.toString());
           },
         );
       }
@@ -164,7 +164,7 @@ class _AddEditInternScreenState extends State<AddEditInternScreen> {
       debugPrint('💥 System Error during save: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        Globals.showSnackBar('System Error: ${e.toString()}', isError: true);
+        Globals.showPremiumError('System Anomaly: ${e.toString()}');
       }
     }
   }
@@ -191,7 +191,7 @@ class _AddEditInternScreenState extends State<AddEditInternScreen> {
                 actions: [
                   TextButton(
                     onPressed: _isLoading ? null : _save,
-                    child: const Text('SAVE', style: TextStyle(fontWeight: FontWeight.w900, color: AppTheme.primary, letterSpacing: 1)),
+                    child: Text('SAVE', style: TextStyle(fontWeight: FontWeight.w900, color: AppTheme.primary, letterSpacing: 1)),
                   ),
                   const SizedBox(width: 12),
                 ],
@@ -252,11 +252,11 @@ class _AddEditInternScreenState extends State<AddEditInternScreen> {
   Widget _buildSwitchRoleAction() {
     return Column(
       children: [
-        const Divider(height: 32, color: AppTheme.divider),
+        Divider(height: 32, color: AppTheme.divider),
         TextButton.icon(
           onPressed: _switchToEmployee,
-          icon: const Icon(Icons.swap_horiz_rounded, color: AppTheme.primary),
-          label: const Text('SWITCH TO EMPLOYEE PROFILE', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold, fontSize: 11)),
+          icon: Icon(Icons.swap_horiz_rounded, color: AppTheme.primary),
+          label: Text('SWITCH TO EMPLOYEE PROFILE', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold, fontSize: 11)),
         ),
         const SizedBox(height: 8),
         Text('This will move this profile to the Employee directory', style: TextStyle(fontSize: 10, color: AppTheme.textLight.withOpacity(0.5))),
@@ -338,7 +338,7 @@ class _AddEditInternScreenState extends State<AddEditInternScreen> {
                   isCircle: true,
                 ),
               ),
-              Positioned(bottom: 0, right: 0, child: Container(padding: const EdgeInsets.all(8), decoration: const BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle), child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white))),
+              Positioned(bottom: 0, right: 0, child: Container(padding: EdgeInsets.all(8), decoration: BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle), child: Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white))),
             ],
           ),
         ),
@@ -357,6 +357,7 @@ class _AddEditInternScreenState extends State<AddEditInternScreen> {
   }
 
   Widget _buildField({required TextEditingController controller, required String label, required IconData icon, TextInputType? keyboardType, int maxLines = 1, String? Function(String?)? validator}) {
+    final isEmail = keyboardType == TextInputType.emailAddress;
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
@@ -364,6 +365,8 @@ class _AddEditInternScreenState extends State<AddEditInternScreen> {
         keyboardType: keyboardType,
         maxLines: maxLines,
         validator: validator,
+        autocorrect: !isEmail,
+        enableSuggestions: !isEmail,
         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
         decoration: InputDecoration(
           labelText: label,
@@ -372,7 +375,7 @@ class _AddEditInternScreenState extends State<AddEditInternScreen> {
           fillColor: const Color(0xFFF1F5F9).withOpacity(0.5),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: AppTheme.primary, width: 1.5)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: AppTheme.primary, width: 1.5)),
           labelStyle: TextStyle(fontSize: 13, color: Colors.blueGrey.withOpacity(0.6)),
         ),
       ),
@@ -410,7 +413,7 @@ class _AddEditInternScreenState extends State<AddEditInternScreen> {
             const SizedBox(height: 4),
             Row(
               children: [
-                const Icon(Icons.calendar_today_rounded, size: 14, color: AppTheme.primary),
+                Icon(Icons.calendar_today_rounded, size: 14, color: AppTheme.primary),
                 const SizedBox(width: 8),
                 Text(DateFormat('dd MMM').format(date), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
               ],

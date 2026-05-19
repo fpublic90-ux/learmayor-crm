@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../app/globals.dart';
 import '../../core/widgets/premium_widgets.dart';
 import '../../core/providers/auth_provider.dart';
@@ -69,7 +70,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Authentication Guard: Prevents building complex UI during logout transition
     final auth = context.watch<AuthProvider>();
+    if (!auth.isLoggedIn) {
+      return Scaffold(
+        backgroundColor: AppTheme.background,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return auth.isAdmin ? _buildAdminReports(context) : _buildStaffReports(context, auth);
   }
 
@@ -82,7 +91,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final reportProvider = context.watch<ReportProvider>();
 
     if (employeeProvider.isLoading || internProvider.isLoading || reportProvider.isLoading) {
-      return const Scaffold(backgroundColor: AppTheme.background, body: Center(child: CircularProgressIndicator()));
+      return Scaffold(backgroundColor: AppTheme.background, body: Center(child: CircularProgressIndicator()));
     }
 
     final employees = employeeProvider.employees;
@@ -132,6 +141,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   centerTitle: false,
                   title: Text('Performance', style: theme.appBarTheme.titleTextStyle),
                 ),
+                actions: const [
+                  NotificationBell(),
+                  SizedBox(width: 8),
+                ],
               ),
               SliverToBoxAdapter(
                 child: Padding(
@@ -195,17 +208,57 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(title: const Text('My Work Logs'), elevation: 0, backgroundColor: Colors.transparent),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildPersonalStats(totalHours, myReports.length, theme),
-            const SizedBox(height: 32),
-            _buildWorkLogReview(reportProvider, theme, false, staffEmail: auth.userEmail),
-            const SizedBox(height: 100),
-          ],
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.all(24),
+            sliver: SliverToBoxAdapter(
+              child: _buildPersonalStats(totalHours, myReports.length, theme),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            sliver: _buildWorkLogSliver(reportProvider, theme, false, staffEmail: auth.userEmail),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkLogSliver(ReportProvider reportProvider, ThemeData theme, bool isAdmin, {String? staffEmail}) {
+    final reports = isAdmin ? reportProvider.reports : reportProvider.getReportsByStaff(staffEmail ?? '');
+    
+    if (reports.isEmpty) {
+      return SliverToBoxAdapter(
+        child: BentoCard(
+          padding: const EdgeInsets.all(40),
+          child: Center(
+            child: Column(
+              children: [
+                Icon(Icons.history_edu_rounded, size: 48, color: AppTheme.textLight.withOpacity(0.3)),
+                const SizedBox(height: 16),
+                Text('No logs found', style: theme.textTheme.bodyMedium?.copyWith(color: AppTheme.textLight)),
+              ],
+            ),
+          ),
         ),
+      );
+    }
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          if (index == 0) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(isAdmin ? 'STAFF WORK LOGS' : 'RECENT SUBMISSIONS', style: theme.textTheme.labelLarge),
+            );
+          }
+          return _buildReviewCard(reports[index - 1], reportProvider, theme, isAdmin);
+        },
+        childCount: reports.length + 1,
       ),
     );
   }
@@ -282,6 +335,53 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
             const SizedBox(height: 16),
             Text(report.description, style: theme.textTheme.bodyMedium),
+            if (report.attachments.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              Text(
+                'ATTACHMENTS',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  color: AppTheme.textMid,
+                  letterSpacing: 1.0,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: report.attachments.map((url) {
+                  final name = _getFileName(url);
+                  final icon = _getFileIcon(url);
+                  return ActionChip(
+                    avatar: Icon(icon, size: 16, color: AppTheme.primary),
+                    label: Text(
+                      name,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textDark,
+                      ),
+                    ),
+                    onPressed: () async {
+                      final uri = Uri.parse(url);
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      } else {
+                        Globals.showSnackBar('Could not open attachment', isError: true);
+                      }
+                    },
+                    backgroundColor: AppTheme.background,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: AppTheme.border),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
             if (isAdmin && report.status == ReportStatus.pending) ...[
               const SizedBox(height: 24),
               Row(
@@ -291,7 +391,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       onPressed: () => provider.updateReportStatus(report.id, ReportStatus.rejected),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppTheme.error,
-                        side: const BorderSide(color: AppTheme.error),
+                        side: BorderSide(color: AppTheme.error),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: const Text('REJECT'),
@@ -317,14 +417,33 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
+  String _getFileName(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final decoded = Uri.decodeComponent(uri.pathSegments.last);
+      return decoded.split('/').last;
+    } catch (_) {
+      return 'Attachment';
+    }
+  }
+
+  IconData _getFileIcon(String url) {
+    final lower = url.toLowerCase();
+    if (lower.endsWith('.pdf')) return Icons.picture_as_pdf_rounded;
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.webp')) {
+      return Icons.image_rounded;
+    }
+    return Icons.insert_drive_file_rounded;
+  }
+
   // --- ADMIN UI COMPONENTS (EXISTING) ---
   Widget _buildMainChart(ThemeData theme) {
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [AppTheme.primary, AppTheme.primaryLight], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        gradient: LinearGradient(colors: [AppTheme.primary, AppTheme.primaryLight], begin: Alignment.topLeft, end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(28),
-        boxShadow: [BoxShadow(color: AppTheme.primary.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 10))],
+        boxShadow: [BoxShadow(color: AppTheme.primary.withOpacity(0.2), blurRadius: 20, offset: Offset(0, 10))],
       ),
       child: Column(children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -397,11 +516,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-                Text(subtitle, style: const TextStyle(fontSize: 12, color: AppTheme.textLight)),
+                Text(subtitle, style: TextStyle(fontSize: 12, color: AppTheme.textLight)),
               ],
             ),
           ),
-          const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textLight),
+          Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textLight),
         ],
       ),
     );
@@ -446,7 +565,7 @@ class _DeptRow extends StatelessWidget {
     return Padding(padding: const EdgeInsets.only(bottom: 20), child: Column(children: [
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(n, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold, color: AppTheme.textDark)), Text('$c', style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w900, color: AppTheme.accent))]),
       const SizedBox(height: 10),
-      ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: p, minHeight: 6, backgroundColor: AppTheme.divider, valueColor: const AlwaysStoppedAnimation(AppTheme.accent))),
+      ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: p, minHeight: 6, backgroundColor: AppTheme.divider, valueColor: AlwaysStoppedAnimation(AppTheme.accent))),
     ]));
   }
 }

@@ -88,6 +88,7 @@ class ReportProvider extends ChangeNotifier {
           tasks: old.tasks,
           hoursWorked: old.hoursWorked,
           status: status,
+          attachments: old.attachments,
         );
         await _repository.updateReport(updated);
         fetchReports(); // Silent background sync (force=false by default)

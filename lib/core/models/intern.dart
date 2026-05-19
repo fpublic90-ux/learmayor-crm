@@ -35,7 +35,7 @@ class Intern {
     this.photoUrl,
     this.status = 'ongoing',
     this.certificateIssued = false,
-  }) : id = id ?? _uuid.v4();
+  }) : id = (id == null || id.isEmpty) ? _uuid.v4() : id;
 
   // Helper getter to calculate the total length of the internship in months
   int get durationInMonths {
@@ -72,8 +72,14 @@ class Intern {
       };
 
   // Recreates the object from a stored Map
-  factory Intern.fromMap(Map<String, dynamic> map) => Intern(
-        id: (map['id'] ?? map['_id'] ?? '').toString(),
+  factory Intern.fromMap(Map<String, dynamic> map) {
+    // Robust Identity Resolution: Fallback chain for various backend implementations
+    String resolvedId = (map['id']?.toString() ?? '');
+    if (resolvedId.isEmpty) resolvedId = (map['_id']?.toString() ?? '');
+    if (resolvedId.isEmpty) resolvedId = _uuid.v4(); // Last resort for local stability
+
+    return Intern(
+      id: resolvedId,
         name: map['name'] ?? '',
         email: map['email'] ?? '',
         phone: map['phone'] ?? '',
@@ -87,6 +93,7 @@ class Intern {
         status: map['status'] ?? 'ongoing',
         certificateIssued: map['certificateIssued'] ?? false,
       );
+  }
 
   // Returns a new instance with specific fields modified
   Intern copyWith({

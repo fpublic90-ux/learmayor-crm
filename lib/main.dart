@@ -13,7 +13,8 @@ import 'core/providers/company_provider.dart';
 import 'core/providers/report_provider.dart';
 import 'core/providers/leave_provider.dart';
 import 'core/providers/notification_provider.dart';
-import 'features/notifications/notification_screen.dart';
+import 'core/providers/theme_provider.dart';
+import 'package:flutter/foundation.dart';
 
 void main() async {
   // Ensuring the Flutter engine is ready before calling any async methods
@@ -33,6 +34,19 @@ void main() async {
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
   ]);
+
+  // Executive Resilience: Implement global error boundaries to prevent Grey Screen failures
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('🚨 [CRITICAL] Flutter Error: ${details.exception}');
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('🚨 [CRITICAL] Platform Error: $error');
+    return true; // Handle globally
+  };
+
+  ErrorWidget.builder = (details) => PremiumErrorWidget(error: details.exception.toString());
 
   runApp(
     MultiProvider(
@@ -63,6 +77,7 @@ void main() async {
           create: (_) => NotificationProvider(),
           update: (_, auth, notif) => notif!..updateToken(auth.token),
         ),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
       child: const LearnyorHRMApp(),
     ),
@@ -94,6 +109,7 @@ class _LearnyorHRMAppState extends State<LearnyorHRMApp> {
 
   @override
   Widget build(BuildContext context) {
+    context.watch<ThemeProvider>();
     return MaterialApp.router(
       title: 'Learnyor HRM',
       theme: AppTheme.lightTheme,

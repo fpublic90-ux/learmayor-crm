@@ -97,7 +97,7 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
       if (finalPhotoUrl == null) {
         if (mounted) {
           setState(() => _isLoading = false);
-          Globals.showSnackBar('Photo upload failed', isError: true);
+          Globals.showPremiumError('Structural failure during photo upload.');
         }
         return;
       }
@@ -133,7 +133,7 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
           onSuccess: (_) {
             debugPrint('✅ Success Path. Buffering Screen Exit...');
             context.read<AuthProvider>().fetchAllUsers();
-            Globals.showSnackBar(_isEdit ? 'Staff Updated' : 'Staff Added');
+            Globals.showPremiumSuccess(_isEdit ? 'Executive record updated' : 'New executive record created');
             
             Future.delayed(const Duration(milliseconds: 100), () {
               if (mounted) {
@@ -142,14 +142,14 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
               }
             });
           },
-          onFailure: (e) => Globals.showSnackBar(e.toString(), isError: true),
+          onFailure: (e) => Globals.showPremiumError(e.toString()),
         );
       }
     } catch (e) {
       debugPrint('💥 System Error during save: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        Globals.showSnackBar('System Error: ${e.toString()}', isError: true);
+        Globals.showPremiumError('System Anomaly: ${e.toString()}');
       }
     }
   }
@@ -177,7 +177,7 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
                 actions: [
                   TextButton(
                     onPressed: _isLoading ? null : _save,
-                    child: const Text('SAVE',
+                    child: Text('SAVE',
                         style: TextStyle(
                             fontWeight: FontWeight.w900,
                             color: AppTheme.primary,
@@ -274,11 +274,11 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
   Widget _buildSwitchRoleAction() {
     return Column(
       children: [
-        const Divider(height: 32, color: AppTheme.divider),
+        Divider(height: 32, color: AppTheme.divider),
         TextButton.icon(
           onPressed: _switchToIntern,
-          icon: const Icon(Icons.swap_horiz_rounded, color: AppTheme.accent),
-          label: const Text('SWITCH TO INTERN PROFILE',
+          icon: Icon(Icons.swap_horiz_rounded, color: AppTheme.accent),
+          label: Text('SWITCH TO INTERN PROFILE',
               style: TextStyle(
                   color: AppTheme.accent,
                   fontWeight: FontWeight.bold,
@@ -383,7 +383,7 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
                   right: 0,
                   child: Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                           color: AppTheme.primary, shape: BoxShape.circle),
                       child: const Icon(Icons.camera_alt_rounded,
                           size: 16, color: Colors.white))),
@@ -420,6 +420,7 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
       TextInputType? keyboardType,
       int maxLines = 1,
       String? Function(String?)? validator}) {
+    final isEmail = keyboardType == TextInputType.emailAddress;
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
@@ -427,6 +428,8 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
         keyboardType: keyboardType,
         maxLines: maxLines,
         validator: validator,
+        autocorrect: !isEmail,
+        enableSuggestions: !isEmail,
         style: const TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.bold,
@@ -445,7 +448,7 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
           focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide:
-                  const BorderSide(color: AppTheme.primary, width: 1.5)),
+                  BorderSide(color: AppTheme.primary, width: 1.5)),
           labelStyle:
               TextStyle(fontSize: 13, color: Colors.blueGrey.withOpacity(0.6)),
         ),
@@ -471,7 +474,7 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
             borderRadius: BorderRadius.circular(16)),
         child: Row(
           children: [
-            const Icon(Icons.calendar_today_rounded,
+            Icon(Icons.calendar_today_rounded,
                 size: 18, color: AppTheme.primary),
             const SizedBox(width: 12),
             Column(

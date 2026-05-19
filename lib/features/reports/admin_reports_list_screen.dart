@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:learnyor_hrm/core/config/api_config.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import '../../app/theme.dart';
@@ -35,7 +36,7 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
       lastDate: DateTime.now(),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(
+          colorScheme: ColorScheme.light(
             primary: AppTheme.accent,
             onPrimary: Colors.white,
             onSurface: AppTheme.textDark,
@@ -131,7 +132,7 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
                 child: Container(color: Colors.transparent),
               ),
             ),
-            title: Column(
+            title: const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Reports',style: TextStyle(fontSize: 35),),
@@ -191,7 +192,7 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
                             const SizedBox(width: 8),
                             IconButton(
                               onPressed: () => setState(() => _selectedDate = null),
-                              icon: const Icon(Icons.close_rounded, size: 20, color: AppTheme.error),
+                              icon: Icon(Icons.close_rounded, size: 20, color: AppTheme.error),
                               style: IconButton.styleFrom(backgroundColor: AppTheme.error.withValues(alpha: 0.1)),
                             ),
                           ],
@@ -379,7 +380,7 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
                 ),
               ],
             ),
-            const Divider(height: 32, color: AppTheme.divider),
+            Divider(height: 32, color: AppTheme.divider),
             Text(report.description, style: theme.textTheme.bodyMedium?.copyWith(color: AppTheme.textDark, height: 1.5)),
             if (report.tasks.isNotEmpty) ...[
               const SizedBox(height: 16),
@@ -426,6 +427,53 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
                 )).toList(),
               ),
             ],
+            if (report.attachments.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Divider(color: AppTheme.divider),
+              const SizedBox(height: 12),
+              Text(
+                'ATTACHMENTS',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  color: AppTheme.textMid,
+                  letterSpacing: 1.0,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: report.attachments.map((url) {
+                  final name = _getFileName(url);
+                  final icon = _getFileIcon(url);
+                  return ActionChip(
+                    avatar: Icon(icon, size: 16, color: AppTheme.primary),
+                    label: Text(
+                      name,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textDark,
+                      ),
+                    ),
+                    onPressed: () async {
+                      final uri = Uri.parse(url);
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      } else {
+                        Globals.showSnackBar('Could not open attachment', isError: true);
+                      }
+                    },
+                    backgroundColor: AppTheme.background,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: AppTheme.border),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
             const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -445,6 +493,25 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
         ),
       ),
     );
+  }
+
+  String _getFileName(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final decoded = Uri.decodeComponent(uri.pathSegments.last);
+      return decoded.split('/').last;
+    } catch (_) {
+      return 'Attachment';
+    }
+  }
+
+  IconData _getFileIcon(String url) {
+    final lower = url.toLowerCase();
+    if (lower.endsWith('.pdf')) return Icons.picture_as_pdf_rounded;
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.webp')) {
+      return Icons.image_rounded;
+    }
+    return Icons.insert_drive_file_rounded;
   }
 
   Widget _buildAvatar(WorkReport report, String? photoUrl) {
@@ -479,7 +546,7 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
           ),
         ),
         if (isSelected)
-          const Icon(Icons.check_rounded, size: 18, color: AppTheme.success),
+          Icon(Icons.check_rounded, size: 18, color: AppTheme.success),
       ],
     );
   }

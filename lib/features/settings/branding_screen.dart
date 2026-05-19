@@ -88,12 +88,12 @@ class _BrandingScreenState extends State<BrandingScreen> {
           children: [
             _buildHeader(isDesktop),
             Padding(
-              padding: const EdgeInsets.all(24),
+              padding: EdgeInsets.all(24),
               child: ResponsiveWrapper(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('IDENTITY',
+                    Text('IDENTITY',
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
@@ -130,24 +130,24 @@ class _BrandingScreenState extends State<BrandingScreen> {
                                   ),
                                 ),
                                 if (_isLoading)
-                                  const CircularProgressIndicator(),
+                                  CircularProgressIndicator(),
                                 Positioned(
                                   bottom: 0,
                                   right: 0,
                                   child: Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: const BoxDecoration(
+                                    padding: EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
                                         color: AppTheme.primary,
                                         shape: BoxShape.circle),
-                                    child: const Icon(Icons.camera_alt_rounded,
+                                    child: Icon(Icons.camera_alt_rounded,
                                         size: 16, color: Colors.white),
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          const Text('PNG or JPG recommended',
+                          SizedBox(height: 12),
+                          Text('PNG or JPG recommended',
                               style: TextStyle(
                                   fontSize: 12, color: AppTheme.textLight)),
                         ],
@@ -158,16 +158,16 @@ class _BrandingScreenState extends State<BrandingScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Company Name',
+                          Text('Company Name',
                               style: TextStyle(
                                   fontSize: 14, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 12),
+                          SizedBox(height: 12),
                           TextField(
                             controller: _nameController,
                             decoration: InputDecoration(
                               hintText: 'Enter company name',
                               suffixIcon: IconButton(
-                                icon: const Icon(Icons.check_circle,
+                                icon: Icon(Icons.check_circle,
                                     color: AppTheme.primary),
                                 onPressed: _saveName,
                               ),
@@ -176,8 +176,8 @@ class _BrandingScreenState extends State<BrandingScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 40),
-                    const Text(
+                    SizedBox(height: 40),
+                    Text(
                         'Note: These changes will be reflected globally across all screens and reports.',
                         style: TextStyle(
                             fontSize: 12,
@@ -197,7 +197,7 @@ class _BrandingScreenState extends State<BrandingScreen> {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.fromLTRB(24, isDesktop ? 60 : 24, 24, 24),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: AppTheme.border)),
       ),
@@ -208,10 +208,10 @@ class _BrandingScreenState extends State<BrandingScreen> {
             IconButton(
               onPressed: () => Navigator.pop(context),
               icon:
-                  const Icon(Icons.arrow_back_rounded, color: AppTheme.textDark),
+                  Icon(Icons.arrow_back_rounded, color: AppTheme.textDark),
             ),
-            const SizedBox(width: 8),
-            const Column(
+            SizedBox(width: 8),
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(

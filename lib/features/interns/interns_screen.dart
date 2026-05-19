@@ -25,13 +25,16 @@ class _InternsScreenState extends State<InternsScreen> {
   String _selectedDepartment = 'All';
   InternSortType _sortType = InternSortType.date;
   bool _isAscending = false;
+  bool _isInitialLoad = true;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        context.read<InternProvider>().fetchInterns();
+        context.read<InternProvider>().fetchInterns().then((_) {
+          if (mounted) setState(() => _isInitialLoad = false);
+        });
       }
     });
     debugPrint('🎓 [INIT] InternsScreen');
@@ -99,7 +102,7 @@ class _InternsScreenState extends State<InternsScreen> {
               actions: [
                 IconButton(
                   onPressed: _showSortDialog,
-                  icon: const Icon(Icons.tune_rounded, color: AppTheme.primary),
+                  icon: Icon(Icons.tune_rounded, color: AppTheme.primary),
                 ),
                 const SizedBox(width: 8),
               ],
@@ -130,15 +133,36 @@ class _InternsScreenState extends State<InternsScreen> {
                           contentPadding: EdgeInsets.symmetric(vertical: 0),
                         ).applyDefaults(theme.inputDecorationTheme),
                       ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        height: 38,
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
-                          physics: const BouncingScrollPhysics(),
-                          children: departments
-                              .map((dept) => _buildDeptChip(dept, theme))
-                              .toList(),
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        height: 50,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppTheme.border),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedDepartment,
+                            icon: Icon(Icons.expand_more_rounded, color: AppTheme.primary),
+                            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold, color: AppTheme.textDark),
+                            dropdownColor: AppTheme.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            items: departments.map((String dept) {
+                              return DropdownMenuItem<String>(
+                                value: dept,
+                                child: Text(dept),
+                              );
+                            }).toList(),
+                            onChanged: (v) {
+                              if (v != null) {
+                                HapticFeedback.selectionClick();
+                                setState(() => _selectedDepartment = v);
+                              }
+                            },
+                          ),
                         ),
                       ),
                     ],
@@ -163,26 +187,38 @@ class _InternsScreenState extends State<InternsScreen> {
                           onAction: () => context.push('/interns/add'),
                           actionLabel: 'Add Intern',
                         )
-                      : AnimationLimiter(
-                          child: ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-                            physics: const BouncingScrollPhysics(),
-                            itemCount: filteredInterns.length,
-                            itemBuilder: (context, index) {
-                              return AnimationConfiguration.staggeredList(
-                                position: index,
-                                duration: const Duration(milliseconds: 600),
-                                child: SlideAnimation(
-                                  verticalOffset: 30.0,
-                                  child: FadeInAnimation(
-                                    child: _InternCard(
-                                        intern: filteredInterns[index],
-                                        theme: theme),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                      : (_isInitialLoad
+                          ? AnimationLimiter(
+                              child: ListView.builder(
+                                padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                                physics: const BouncingScrollPhysics(),
+                                itemCount: filteredInterns.length,
+                                itemBuilder: (context, index) {
+                                  return AnimationConfiguration.staggeredList(
+                                    position: index,
+                                    duration: const Duration(milliseconds: 600),
+                                    child: SlideAnimation(
+                                      verticalOffset: 30.0,
+                                      child: FadeInAnimation(
+                                        child: _InternCard(
+                                            intern: filteredInterns[index],
+                                            theme: theme),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+                              physics: const BouncingScrollPhysics(),
+                              itemCount: filteredInterns.length,
+                              itemBuilder: (context, index) {
+                                return _InternCard(
+                                    intern: filteredInterns[index],
+                                    theme: theme);
+                              },
+                            )
                         ),
                 ),
         ),
@@ -253,7 +289,7 @@ class _InternsScreenState extends State<InternsScreen> {
             _buildSortOption('Name', InternSortType.name, theme),
             _buildSortOption('Joining Date', InternSortType.date, theme),
             _buildSortOption('Stipend', InternSortType.stipend, theme),
-            const Divider(height: 40, color: AppTheme.divider),
+            Divider(height: 40, color: AppTheme.divider),
             SwitchListTile(
               title: Text('Ascending Order', style: theme.textTheme.titleSmall),
               activeThumbColor: AppTheme.accent,
@@ -396,9 +432,9 @@ class _SliverSearchDelegate extends SliverPersistentHeaderDelegate {
   _SliverSearchDelegate({required this.child});
 
   @override
-  double get minExtent => 122;
+  double get minExtent => 150;
   @override
-  double get maxExtent => 122;
+  double get maxExtent => 150;
 
   @override
   Widget build(

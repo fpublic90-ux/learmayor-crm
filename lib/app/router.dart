@@ -18,6 +18,7 @@ import '../features/staff/staff_hub_screen.dart';
 import '../features/staff/submit_report_screen.dart';
 import '../features/dashboard/onboarding_vault_screen.dart';
 import '../features/leave/request_leave_screen.dart';
+import '../features/leave/my_leave_requests_screen.dart';
 import 'shell_layout.dart';
 
 class AppRouter {
@@ -94,6 +95,7 @@ class AppRouter {
             GoRoute(path: '/staff/hub', builder: (_, __) => const StaffHubScreen()),
             GoRoute(path: '/staff/report/add', builder: (_, __) => const SubmitReportScreen()),
             GoRoute(path: '/staff/leave/request', builder: (_, __) => const RequestLeaveScreen()),
+            GoRoute(path: '/staff/leave/list', builder: (_, __) => const MyLeaveRequestsScreen()),
           ],
         ),
       ],

@@ -60,7 +60,15 @@ class EmployeeProvider extends ChangeNotifier {
 
     try {
       final newEmployees = await _repository.getEmployees();
-      _employees = newEmployees;
+      
+      // Deduplicate by ID to prevent Hero tag crashes from backend anomalies
+      final Map<String, Employee> deduped = {};
+      for (var emp in newEmployees) {
+        // Keep the newest/last one if duplicates exist
+        deduped[emp.id] = emp;
+      }
+      _employees = deduped.values.toList();
+      
     } catch (e) {
       _errorMessage = 'Failed to fetch employees: $e';
     } finally {

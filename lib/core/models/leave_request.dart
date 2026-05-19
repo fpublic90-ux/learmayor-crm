@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 
 enum LeaveStatus { pending, approved, rejected }
 enum LeaveType { fullDay, halfDay }
@@ -41,7 +40,7 @@ class LeaveRequest {
   };
 
   factory LeaveRequest.fromJson(Map<String, dynamic> json) => LeaveRequest(
-    id: json['id'] ?? '',
+    id: json['id']?.toString() ?? json['_id']?.toString() ?? '',
     staffId: json['staffId'] ?? '',
     staffName: json['staffName'] ?? '',
     startDate: DateTime.parse(json['startDate']),

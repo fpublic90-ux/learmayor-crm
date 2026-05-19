@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import '../../core/config/api_config.dart';
 import '../../app/theme.dart';
 import '../../app/globals.dart';
 import '../../core/providers/auth_provider.dart';
@@ -18,9 +24,11 @@ class SubmitReportScreen extends StatefulWidget {
 class _SubmitReportScreenState extends State<SubmitReportScreen> {
   final _descriptionController = TextEditingController();
   final _taskController = TextEditingController();
-  final _hoursController = TextEditingController(text: '8');
+  final _hoursController = TextEditingController();
   final List<String> _tasks = [];
+  final List<String> _attachments = [];
   bool _isSubmitting = false;
+  bool _isUploadingFile = false;
 
   @override
   void initState() {
@@ -68,6 +76,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
       tasks: _tasks,
       hoursWorked: int.tryParse(_hoursController.text) ?? 0,
       status: ReportStatus.pending,
+      attachments: _attachments,
     );
 
     debugPrint('📡 [NET] Dispatching Report: ${report.id} for ${report.staffName}');
@@ -174,21 +183,47 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                 ],
               ),
             ),
+             const SizedBox(height: 32),
+            _buildSectionHeader('SUPPORTING DOCUMENTS & IMAGES', Icons.attach_file_rounded),
+            const SizedBox(height: 16),
+            BentoCard(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_isUploadingFile) ...[
+                    const Center(
+                      child: CircularProgressIndicator(strokeWidth: 3),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_attachments.isNotEmpty) ...[
+                    ..._attachments.map((url) => _buildAttachmentItem(url)),
+                    const SizedBox(height: 16),
+                    const Divider(height: 1),
+                    const SizedBox(height: 16),
+                  ],
+                  SizedBox(
+                    width: double.infinity,
+                    child: PremiumButton(
+                      onPressed: _isUploadingFile ? null : _pickAndUploadFile,
+                      label: 'ATTACH FILES',
+                      isOutline: true,
+                      color: AppTheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 48),
             SizedBox(
               width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: _isSubmitting ? null : _handleSubmit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-                child: _isSubmitting 
-                  ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
-                  : const Text('SUBMIT DAILY LOG', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1, fontSize: 14)),
+              child: PremiumButton(
+                onPressed: () {
+                  if (!_isSubmitting) _handleSubmit();
+                },
+                label: 'SUBMIT DAILY LOG',
+                isLoading: _isSubmitting,
               ),
             ),
             const SizedBox(height: 40),
@@ -205,7 +240,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
         const SizedBox(width: 8),
         Text(
           label,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: AppTheme.textMid, letterSpacing: 1.2),
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: AppTheme.textMid, letterSpacing: 1.2),
         ),
       ],
     );
@@ -219,16 +254,183 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
           Container(
             width: 6,
             height: 6,
-            decoration: const BoxDecoration(color: AppTheme.accent, shape: BoxShape.circle),
+            decoration: BoxDecoration(color: AppTheme.accent, shape: BoxShape.circle),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(task, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textDark)),
+            child: Text(task, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textDark)),
           ),
           IconButton(
             onPressed: () => setState(() => _tasks.remove(task)),
-            icon: const Icon(Icons.close_rounded, size: 18, color: AppTheme.error),
+            icon: Icon(Icons.close_rounded, size: 18, color: AppTheme.error),
             style: IconButton.styleFrom(backgroundColor: AppTheme.error.withValues(alpha: 0.1)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickAndUploadFile() async {
+    final auth = context.read<AuthProvider>();
+
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'png', 'jpeg', 'webp'],
+      );
+
+      if (!mounted) return;
+
+      if (result != null && result.files.isNotEmpty) {
+        setState(() => _isUploadingFile = true);
+        
+        for (final file in result.files) {
+          final request = http.MultipartRequest(
+            'POST', 
+            Uri.parse('${ApiConfig.baseUrl}/api/upload-document')
+          );
+          
+          if (auth.token != null) {
+            request.headers['Authorization'] = 'Bearer ${auth.token}';
+          }
+
+          if (kIsWeb) {
+            if (file.bytes != null) {
+              request.files.add(
+                http.MultipartFile.fromBytes(
+                  'file', 
+                  file.bytes!, 
+                  filename: file.name
+                )
+              );
+            }
+          } else {
+            if (file.path != null) {
+              request.files.add(
+                await http.MultipartFile.fromPath('file', file.path!)
+              );
+            }
+          }
+
+          final response = await request.send();
+          if (response.statusCode == 200) {
+            final respStr = await response.stream.bytesToString();
+            final data = jsonDecode(respStr);
+            final fileUrl = data['fileUrl'];
+            if (fileUrl != null) {
+              setState(() {
+                _attachments.add(fileUrl);
+              });
+            }
+          } else {
+            Globals.showSnackBar('Failed to upload ${file.name}', isError: true);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error picking/uploading file: $e');
+      Globals.showSnackBar('Error uploading file: $e', isError: true);
+    } finally {
+      setState(() => _isUploadingFile = false);
+    }
+  }
+
+  String _getFileName(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final decoded = Uri.decodeComponent(uri.pathSegments.last);
+      return decoded.split('/').last;
+    } catch (_) {
+      return 'Attachment';
+    }
+  }
+
+  IconData _getFileIcon(String url) {
+    final lower = url.toLowerCase();
+    if (lower.endsWith('.pdf')) return Icons.picture_as_pdf_rounded;
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.webp')) {
+      return Icons.image_rounded;
+    }
+    return Icons.insert_drive_file_rounded;
+  }
+
+  Widget _buildAttachmentItem(String url) {
+    final name = _getFileName(url);
+    final icon = _getFileIcon(url);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, color: AppTheme.primary, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textDark),
+            ),
+          ),
+          IconButton(
+            onPressed: () => setState(() => _attachments.remove(url)),
+            icon: Icon(Icons.close_rounded, size: 18, color: AppTheme.error),
+            style: IconButton.styleFrom(backgroundColor: AppTheme.error.withValues(alpha: 0.1)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool> _requestStoragePermission() async {
+    if (kIsWeb) return true;
+
+    // Check modern storage status
+    var status = await Permission.storage.status;
+    if (status.isGranted) return true;
+
+    status = await Permission.storage.request();
+    if (status.isGranted) return true;
+
+    // Direct them to App settings if permanently denied
+    if (status.isPermanentlyDenied) {
+      _showSettingsDialog();
+      return false;
+    }
+
+    return false;
+  }
+
+  void _showSettingsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          'Storage Permission Required',
+          style: TextStyle(fontWeight: FontWeight.w900, color: AppTheme.textDark),
+        ),
+        content: Text(
+          'To attach supporting documents and images, please enable storage access in your app settings.',
+          style: TextStyle(color: AppTheme.textMid),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('CANCEL', style: TextStyle(color: AppTheme.textLight, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await openAppSettings();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('OPEN SETTINGS'),
           ),
         ],
       ),

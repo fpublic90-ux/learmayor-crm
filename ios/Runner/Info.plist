@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app requires access to the photo library to upload supporting documents and images for work logs.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>This app requires access to the camera to take and upload photos for work logs.</string>
 </dict>
 </plist>

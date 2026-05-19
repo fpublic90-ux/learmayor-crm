@@ -60,7 +60,15 @@ class InternProvider extends ChangeNotifier {
 
     try {
       final newInterns = await _repository.getInterns();
-      _interns = newInterns;
+      
+      // Deduplicate by ID to prevent Hero tag crashes from backend anomalies
+      final Map<String, Intern> deduped = {};
+      for (var intern in newInterns) {
+        // Keep the newest/last one if duplicates exist
+        deduped[intern.id] = intern;
+      }
+      _interns = deduped.values.toList();
+      
     } catch (e) {
       _errorMessage = 'Failed to fetch interns: $e';
     } finally {

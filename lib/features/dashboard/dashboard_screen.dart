@@ -27,130 +27,137 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final employeeProvider = context.watch<EmployeeProvider>();
-    final internProvider = context.watch<InternProvider>();
-    final attendanceProvider = context.watch<AttendanceProvider>();
-    final auth = context.watch<AuthProvider>();
-
-    final employeeCount = employeeProvider.employees.length;
-    final internCount = internProvider.interns.length;
-    final totalStaff = employeeCount + internCount;
-
-    final todayAttendance = attendanceProvider.getAttendanceForDate(DateTime.now())
-        .where((a) => a.status == AttendanceStatus.present || a.status == AttendanceStatus.halfDay)
-        .length;
-
-    final attendancePercent = totalStaff > 0 ? todayAttendance / totalStaff : 0.0;
-    final isLoading = employeeProvider.isLoading || internProvider.isLoading || attendanceProvider.isLoading;
-    final allUsers = auth.allUsers;
-
-    // Relational Diagnostics: Identifying pending sign-ups across the system
-    final onboardedEmails = {
-      ...employeeProvider.employees.map((e) => e.email.toLowerCase().trim()),
-      ...internProvider.interns.map((i) => i.email.toLowerCase().trim()),
-    };
     
-    final pendingUsers = allUsers.where((u) {
-      final email = u['email']?.toString().toLowerCase().trim();
-      if (email == null || email.isEmpty || email == 'null') return false;
-      
-      final isSelf = email == auth.userEmail?.toLowerCase().trim();
-      final isAlreadyOnboarded = onboardedEmails.contains(email);
-      
-      // We are looking for any user who is NOT the admin and NOT yet officially onboarded
-      return !isSelf && !isAlreadyOnboarded;
-    }).toList();
+    // Performance Governance: Using Selectors to prevent unnecessary rebuilds
+    return Selector4<EmployeeProvider, InternProvider, AttendanceProvider, AuthProvider, _DashboardData?>(
+      selector: (context, empP, intP, attP, authP) {
+        if (!authP.isLoggedIn) return null;
+        
+        return _DashboardData(
+          employeeCount: empP.employees.length,
+          internCount: intP.interns.length,
+          isLoading: empP.isLoading || intP.isLoading || attP.isLoading,
+          allUsers: authP.allUsers,
+          onboardedEmails: {
+            ...empP.employees.map((e) => e.email.toLowerCase().trim()),
+            ...intP.interns.map((i) => i.email.toLowerCase().trim()),
+          },
+          todayAttendance: attP.getAttendanceForDate(DateTime.now())
+              .where((a) => a.status == AttendanceStatus.present || a.status == AttendanceStatus.halfDay)
+              .length,
+          userEmail: authP.userEmail,
+        );
+      },
+      builder: (context, data, _) {
+        if (data == null) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        
+        final totalStaff = data.employeeCount + data.internCount;
+        final attendancePercent = totalStaff > 0 ? data.todayAttendance / totalStaff : 0.0;
+        
+        // Memoized Calculation: Only find pending users when data actually changes
+        final pendingUsers = data.allUsers.where((u) {
+          final email = u['email']?.toString().toLowerCase().trim();
+          if (email == null || email.isEmpty || email == 'null') return false;
+          final isSelf = email == data.userEmail?.toLowerCase().trim();
+          return !isSelf && !data.onboardedEmails.contains(email);
+        }).toList();
 
-    debugPrint('📊 [DASHBOARD] Sync: ${allUsers.length} total users, ${pendingUsers.length} pending onboarding');
+        debugPrint('📊 [DASHBOARD] Sync: ${data.allUsers.length} total users, ${pendingUsers.length} pending onboarding');
+        
+        final auth = context.read<AuthProvider>();
 
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: RefreshIndicator(
-        onRefresh: () async {
-          debugPrint('🔄 [ACTION] Manual Refresh Triggered');
-          await Future.wait<void>([
-            context.read<AuthProvider>().fetchAllUsers(),
-            context.read<EmployeeProvider>().fetchEmployees(),
-            context.read<InternProvider>().fetchInterns(),
-            context.read<ReportProvider>().fetchReports(),
-            context.read<AttendanceProvider>().fetchAttendance(),
-          ]);
-        },
-        color: AppTheme.primary,
-        backgroundColor: Colors.white,
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                AppTheme.primarySubtle.withOpacity(0.3),
-                AppTheme.background,
-              ],
-            ),
-          ),
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              _buildAppBar(context, auth, theme),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: isLoading 
-                    ? _buildSkeleton()
-                    : AnimationLimiter(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: AnimationConfiguration.toStaggeredList(
-                            duration: const Duration(milliseconds: 800),
-                            childAnimationBuilder: (widget) => SlideAnimation(
-                              verticalOffset: 40.0,
-                              child: FadeInAnimation(child: widget),
-                            ),
-                            children: [
-                              const SizedBox(height: 12),
-                              if (pendingUsers.isNotEmpty) ...[
-                                _buildRegistrationAlert(context, pendingUsers.length, theme),
-                                const SizedBox(height: 24),
-                              ],
-                              _buildAttendanceHero(context, attendancePercent, todayAttendance, totalStaff, theme),
-                              const SizedBox(height: 24),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _ExecutiveStatCard(
-                                      title: 'STAFF MEMBERS',
-                                      value: employeeCount.toString(),
-                                      icon: Icons.people_rounded,
-                                      color: AppTheme.primary,
-                                      onTap: () => context.push('/employees'),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: _ExecutiveStatCard(
-                                      title: 'INTERNS',
-                                      value: internCount.toString(),
-                                      icon: Icons.school_rounded,
-                                      color: AppTheme.accent,
-                                      onTap: () => context.push('/interns'),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 32),
-                              _buildQuickActionSection(context, theme),
-                              const SizedBox(height: 100),
-                            ],
-                          ),
-                        ),
-                      ),
+        return Scaffold(
+          backgroundColor: AppTheme.background,
+          body: RefreshIndicator(
+            onRefresh: () async {
+              debugPrint('🔄 [ACTION] Manual Refresh Triggered');
+              await Future.wait<void>([
+                context.read<AuthProvider>().fetchAllUsers(),
+                context.read<EmployeeProvider>().fetchEmployees(),
+                context.read<InternProvider>().fetchInterns(),
+                context.read<ReportProvider>().fetchReports(),
+                context.read<AttendanceProvider>().fetchAttendance(),
+              ]);
+            },
+            color: AppTheme.primary,
+            backgroundColor: Colors.white,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppTheme.primarySubtle.withOpacity(0.3),
+                    AppTheme.background,
+                  ],
                 ),
               ),
-            ],
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  _buildAppBar(context, auth, theme),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: data.isLoading 
+                        ? _buildSkeleton()
+                        : AnimationLimiter(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: AnimationConfiguration.toStaggeredList(
+                                duration: const Duration(milliseconds: 800),
+                                childAnimationBuilder: (widget) => SlideAnimation(
+                                  verticalOffset: 40.0,
+                                  child: FadeInAnimation(child: widget),
+                                ),
+                                children: [
+                                  const SizedBox(height: 12),
+                                  if (pendingUsers.isNotEmpty) ...[
+                                    _buildRegistrationAlert(context, pendingUsers.length, theme),
+                                    const SizedBox(height: 24),
+                                  ],
+                                  _buildAttendanceHero(context, attendancePercent, data.todayAttendance, totalStaff, theme),
+                                  const SizedBox(height: 24),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _ExecutiveStatCard(
+                                          title: 'STAFF MEMBERS',
+                                          value: data.employeeCount.toString(),
+                                          icon: Icons.people_rounded,
+                                          color: AppTheme.primary,
+                                          onTap: () => context.push('/employees'),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: _ExecutiveStatCard(
+                                          title: 'INTERNS',
+                                          value: data.internCount.toString(),
+                                          icon: Icons.school_rounded,
+                                          color: AppTheme.accent,
+                                          onTap: () => context.push('/interns'),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 32),
+                                  _buildQuickActionSection(context, theme),
+                                  const SizedBox(height: 100),
+                                ],
+                              ),
+                            ),
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -163,7 +170,7 @@ class DashboardScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: AppTheme.warning.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
-            child: const Icon(Icons.person_add_rounded, color: AppTheme.warning, size: 24),
+            child: Icon(Icons.person_add_rounded, color: AppTheme.warning, size: 24),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -223,6 +230,7 @@ class DashboardScreen extends StatelessWidget {
         ),
       ),
       actions: [
+        const NotificationBell(),
         Padding(
           padding: const EdgeInsets.only(right: 20, top: 8, bottom: 8),
           child: GestureDetector(
@@ -245,7 +253,6 @@ class DashboardScreen extends StatelessWidget {
       ],
     );
   }
- }
 
   Widget _buildAttendanceHero(BuildContext context, double percent, int present, int total, ThemeData theme) {
     return BentoCard(
@@ -262,7 +269,7 @@ class DashboardScreen extends StatelessWidget {
                   children: [
                     Container(
                       width: 8, height: 8,
-                      decoration: const BoxDecoration(color: AppTheme.success, shape: BoxShape.circle),
+                      decoration: BoxDecoration(color: AppTheme.success, shape: BoxShape.circle),
                     ),
                     const SizedBox(width: 8),
                     Text('LIVE STATUS', style: theme.textTheme.labelLarge?.copyWith(color: AppTheme.success)),
@@ -285,14 +292,14 @@ class DashboardScreen extends StatelessWidget {
           Stack(
             alignment: Alignment.center,
             children: [
-              const SizedBox(width: 90, height: 90, child: CircularProgressIndicator(value: 1.0, strokeWidth: 10, valueColor: AlwaysStoppedAnimation(AppTheme.divider))),
+              SizedBox(width: 90, height: 90, child: CircularProgressIndicator(value: 1.0, strokeWidth: 10, valueColor: AlwaysStoppedAnimation(AppTheme.divider))),
               SizedBox(
                 width: 90, height: 90,
                 child: TweenAnimationBuilder<double>(
                   tween: Tween(begin: 0, end: percent),
                   duration: const Duration(milliseconds: 2000),
                   curve: Curves.elasticOut,
-                  builder: (context, value, _) => CircularProgressIndicator(value: value, strokeWidth: 10, strokeCap: StrokeCap.round, valueColor: const AlwaysStoppedAnimation(AppTheme.accent)),
+                  builder: (context, value, _) => CircularProgressIndicator(value: value, strokeWidth: 10, strokeCap: StrokeCap.round, valueColor: AlwaysStoppedAnimation(AppTheme.accent)),
                 ),
               ),
               Text('${(percent * 100).toInt()}%', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
@@ -325,50 +332,45 @@ class DashboardScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 16),
-        _buildActionTile(
-          context, 
-          'Manage Leave Requests', 
-          Icons.event_note_rounded, 
-          AppTheme.primary, 
-          () => context.push('/reports/leave'), 
-          theme,
-          isFullWidth: true,
+        Row(
+          children: [
+            Expanded(child: _buildActionTile(context, 'Leave Requests', Icons.event_note_rounded, AppTheme.primary, () => context.push('/reports/leave'), theme)),
+            const SizedBox(width: 16),
+            Expanded(child: _buildActionTile(context, 'Work Reports', Icons.assessment_rounded, AppTheme.accent, () => context.push('/reports'), theme)),
+          ],
         ),
       ],
     );
   }
 
-  Widget _buildActionTile(BuildContext context, String t, IconData i, Color c, VoidCallback onTap, ThemeData theme, {bool isFullWidth = false}) {
+  Widget _buildActionTile(BuildContext context, String t, IconData i, Color c, VoidCallback onTap, ThemeData theme) {
     return BentoCard(
       isKinetic: true,
       onTap: () { HapticFeedback.mediumImpact(); onTap(); },
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
-      child: isFullWidth 
-        ? Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: c.withOpacity(0.08), borderRadius: BorderRadius.circular(16)),
-                child: Icon(i, color: c, size: 28),
-              ),
-              const SizedBox(width: 20),
-              Expanded(child: Text(t, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: AppTheme.textDark))),
-              const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textLight),
-            ],
-          )
-        : Column(
-            children: [
-              Icon(i, color: c, size: 28),
-              const SizedBox(height: 12),
-              Text(t, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: AppTheme.textDark)),
-            ],
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: c.withOpacity(0.08), borderRadius: BorderRadius.circular(16)),
+            child: Icon(i, color: c, size: 28),
           ),
+          const SizedBox(height: 16),
+          Text(
+            t, 
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900, color: AppTheme.textDark, fontSize: 13),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildSkeleton() {
     return const Column(children: [SizedBox(height: 20), ShimmerLoading(width: double.infinity, height: 180, borderRadius: 28), SizedBox(height: 24), Row(children: [Expanded(child: ShimmerLoading(width: double.infinity, height: 150, borderRadius: 28)), SizedBox(width: 16), Expanded(child: ShimmerLoading(width: double.infinity, height: 150, borderRadius: 28))])]);
   }
+}
 
 
 class _ExecutiveStatCard extends StatelessWidget {
@@ -393,4 +395,48 @@ class _ExecutiveStatCard extends StatelessWidget {
       ),
     );
   }
+}
+
+// Data Wrapper for high-fidelity selector performance
+class _DashboardData {
+  final int employeeCount;
+  final int internCount;
+  final bool isLoading;
+  final List<Map<String, dynamic>> allUsers;
+  final Set<String> onboardedEmails;
+  final int todayAttendance;
+  final String? userEmail;
+
+  _DashboardData({
+    required this.employeeCount,
+    required this.internCount,
+    required this.isLoading,
+    required this.allUsers,
+    required this.onboardedEmails,
+    required this.todayAttendance,
+    this.userEmail,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _DashboardData &&
+          runtimeType == other.runtimeType &&
+          employeeCount == other.employeeCount &&
+          internCount == other.internCount &&
+          isLoading == other.isLoading &&
+          allUsers.length == other.allUsers.length &&
+          onboardedEmails.length == other.onboardedEmails.length &&
+          todayAttendance == other.todayAttendance &&
+          userEmail == other.userEmail;
+
+  @override
+  int get hashCode =>
+      employeeCount.hashCode ^
+      internCount.hashCode ^
+      isLoading.hashCode ^
+      allUsers.length.hashCode ^
+      onboardedEmails.length.hashCode ^
+      todayAttendance.hashCode ^
+      userEmail.hashCode;
 }

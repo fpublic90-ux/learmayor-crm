@@ -169,7 +169,7 @@ class _LoginScreenState extends State<LoginScreen> {
               BoxShadow(color: AppTheme.accent.withValues(alpha: 0.2), blurRadius: 40, spreadRadius: -10)
             ],
           ),
-          child: const Icon(Icons.token_rounded, size: 54, color: AppTheme.accent),
+          child: Icon(Icons.token_rounded, size: 54, color: AppTheme.accent),
         ),
         const SizedBox(height: 32),
         const Text(
@@ -225,6 +225,8 @@ class _LoginScreenState extends State<LoginScreen> {
       controller: controller,
       obscureText: obscure,
       keyboardType: keyboard,
+      autocorrect: false,
+      enableSuggestions: !obscure && keyboard != TextInputType.emailAddress,
       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
       decoration: InputDecoration(
         hintText: hint,
@@ -234,7 +236,7 @@ class _LoginScreenState extends State<LoginScreen> {
         fillColor: Colors.white.withOpacity(0.03),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.white.withOpacity(0.05))),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: AppTheme.primary)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: AppTheme.primary)),
       ),
     );
   }
@@ -244,7 +246,7 @@ class _LoginScreenState extends State<LoginScreen> {
       height: 58,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: AppTheme.primary.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))],
+        boxShadow: [BoxShadow(color: AppTheme.primary.withOpacity(0.3), blurRadius: 20, offset: Offset(0, 10))],
       ),
       child: ElevatedButton(
         onPressed: _isLoading ? null : _login,
@@ -289,7 +291,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.verified_user_rounded, color: AppTheme.primary, size: 80),
+                  Icon(Icons.verified_user_rounded, color: AppTheme.primary, size: 80),
                   const SizedBox(height: 24),
                   const Text('ACCESS GRANTED', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 2)),
                   const SizedBox(height: 12),

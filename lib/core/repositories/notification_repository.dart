@@ -51,4 +51,19 @@ class NotificationRepository {
       throw Exception('Failed to mark all notifications as read: $e');
     }
   }
+
+  Future<void> deleteNotification(String id) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('${ApiConfig.baseUrl}/api/notifications/$id'),
+        headers: _headers,
+      );
+      
+      if (response.statusCode != 200 && response.statusCode != 204) {
+        throw Exception('Server failed to delete notification (Status: ${response.statusCode})');
+      }
+    } catch (e) {
+      throw Exception('Failed to delete notification: $e');
+    }
+  }
 }

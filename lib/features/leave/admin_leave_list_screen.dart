@@ -41,7 +41,7 @@ class _AdminLeaveListScreenState extends State<AdminLeaveListScreen> {
         onBack: () => context.pop(),
       ),
       body: provider.isLoading && provider.leaveRequests.isEmpty
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          ? Center(child: CircularProgressIndicator(color: AppTheme.primary))
           : RefreshIndicator(
               onRefresh: () => provider.fetchLeaveRequests(force: true),
               child: ListView(
@@ -74,7 +74,7 @@ class _AdminLeaveListScreenState extends State<AdminLeaveListScreen> {
   Widget _buildSectionHeader(String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 12,
         fontWeight: FontWeight.w900,
         color: AppTheme.textMid,
@@ -103,17 +103,17 @@ class _AdminLeaveListScreenState extends State<AdminLeaveListScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(request.staffName, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-                      Text(request.staffId, style: const TextStyle(color: AppTheme.textMid, fontSize: 12)),
+                      Text(request.staffId, style: TextStyle(color: AppTheme.textMid, fontSize: 12)),
                     ],
                   ),
                 ),
                 StatusBadge(label: request.status.name.toUpperCase(), color: statusColor),
               ],
             ),
-            const Divider(height: 32, color: AppTheme.divider),
+            Divider(height: 32, color: AppTheme.divider),
             Row(
               children: [
-                const Icon(Icons.date_range_rounded, size: 18, color: AppTheme.primary),
+                Icon(Icons.date_range_rounded, size: 18, color: AppTheme.primary),
                 const SizedBox(width: 12),
                 Text(
                   '${DateFormat('MMM dd').format(request.startDate)} - ${DateFormat('MMM dd').format(request.endDate)}',
@@ -128,13 +128,13 @@ class _AdminLeaveListScreenState extends State<AdminLeaveListScreen> {
                   ),
                   child: Text(
                     request.type == LeaveType.fullDay ? 'FULL DAY' : 'HALF DAY',
-                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: AppTheme.primary),
+                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: AppTheme.primary),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            Text(request.reason, style: const TextStyle(height: 1.5, color: AppTheme.textDark)),
+            Text(request.reason, style: TextStyle(height: 1.5, color: AppTheme.textDark)),
             if (isPending) ...[
               const SizedBox(height: 24),
               Row(

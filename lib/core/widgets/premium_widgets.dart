@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+import 'package:learnyor_hrm/core/providers/notification_provider.dart';
+import 'package:provider/provider.dart';
 import '../../app/theme.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show File;
 import 'dart:ui';
+import '../../app/globals.dart';
 
 /// A premium Bento-style card with hover effects for desktop
 class BentoCard extends StatefulWidget {
@@ -100,26 +104,26 @@ class DetailTile extends StatelessWidget {
             ),
             child: Icon(icon, color: iconColor ?? AppTheme.textMid, size: 20),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     color: AppTheme.textLight,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.5,
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 Text(
                   value,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
                     color: AppTheme.textDark,
@@ -160,6 +164,60 @@ class StatusBadge extends StatelessWidget {
         style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color, letterSpacing: 0.5),
       ),
     );
+  }
+}
+
+/// A high-fidelity notification bell for use in AppBars
+class NotificationBell extends StatelessWidget {
+  final Color? color;
+  const NotificationBell({super.key, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    // Selective watching to prevent unnecessary app-wide rebuilds
+    final unreadCount = context.select<NotificationProvider, int>((p) => p.unreadCount);
+    final provider = context.read<NotificationProvider>();
+    
+    return GestureDetector(
+      onLongPress: () {
+        HapticFeedback.heavyImpact();
+        provider.markAllAsRead();
+        Globals.showSnackBar('All notifications cleared');
+      },
+      child: IconButton(
+        onPressed: () {
+          HapticFeedback.mediumImpact();
+          context.push('/notifications');
+        },
+        icon: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Icon(Icons.notifications_rounded, color: color ?? AppTheme.textDark, size: 24),
+            if (unreadCount > 0)
+            Positioned(
+              top: -4,
+              right: -4,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: AppTheme.error,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(color: AppTheme.error.withOpacity(0.3), blurRadius: 4, offset: Offset(0, 2)),
+                  ],
+                ),
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                child: Text(
+                  unreadCount > 9 ? '9+' : '$unreadCount',
+                  style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
+      ),
+     ) );
   }
 }
 
@@ -435,7 +493,7 @@ class PremiumConfirmationDialog extends StatelessWidget {
   final String message;
   final String confirmLabel;
   final String cancelLabel;
-  final Color confirmColor;
+  final Color? confirmColor;
   final IconData? icon;
 
   const PremiumConfirmationDialog({
@@ -444,7 +502,7 @@ class PremiumConfirmationDialog extends StatelessWidget {
     required this.message,
     this.confirmLabel = 'Confirm',
     this.cancelLabel = 'Cancel',
-    this.confirmColor = AppTheme.primary,
+    this.confirmColor,
     this.icon,
   });
 
@@ -463,24 +521,24 @@ class PremiumConfirmationDialog extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: confirmColor.withOpacity(0.1),
+                color: (confirmColor ?? AppTheme.primary).withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: confirmColor, size: 32),
+              child: Icon(icon, color: confirmColor ?? AppTheme.primary, size: 32),
             ),
             const SizedBox(height: 24),
           ],
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: AppTheme.textDark),
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: AppTheme.textDark),
           ),
         ],
       ),
       content: Text(
         message,
         textAlign: TextAlign.center,
-        style: const TextStyle(color: AppTheme.textMid, fontSize: 15, height: 1.5),
+        style: TextStyle(color: AppTheme.textMid, fontSize: 15, height: 1.5),
       ),
       actions: [
         Row(
@@ -492,7 +550,7 @@ class PremiumConfirmationDialog extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
-                child: Text(cancelLabel, style: const TextStyle(color: AppTheme.textMid, fontWeight: FontWeight.bold)),
+                child: Text(cancelLabel, style: TextStyle(color: AppTheme.textMid, fontWeight: FontWeight.bold)),
               ),
             ),
             const SizedBox(width: 12),
@@ -561,7 +619,7 @@ class PremiumHeader extends StatelessWidget {
                     onPressed: onBack ?? () => Navigator.maybePop(context),
                     style: IconButton.styleFrom(
                       backgroundColor: AppTheme.background,
-                      padding: const EdgeInsets.all(12),
+                      padding: EdgeInsets.all(12),
                     ),
                   ),
                 ),
@@ -571,7 +629,7 @@ class PremiumHeader extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
                         color: AppTheme.textDark,
@@ -599,7 +657,7 @@ class PremiumHeader extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Text(
                 subtitle!,
-                style: const TextStyle(color: AppTheme.textMid, fontSize: 14),
+                style: TextStyle(color: AppTheme.textMid, fontSize: 14),
               ),
             ),
           ],
@@ -635,20 +693,20 @@ class PremiumLoadingOverlay extends StatelessWidget {
       height: double.infinity,
       child: Center(
         child: BentoCard(
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+          padding: EdgeInsets.symmetric(horizontal: 32, vertical: 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const CircularProgressIndicator(
+              CircularProgressIndicator(
                 color: AppTheme.primary,
                 strokeWidth: 3,
               ),
               if (message != null) ...[
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
                 Text(
                   message!,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
                     color: AppTheme.textDark,

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../models/attendance.dart';
 import '../config/api_config.dart';
@@ -20,9 +21,10 @@ class AttendanceRepository {
         final List data = jsonDecode(response.body);
         return data.map((a) => Attendance.fromMap(a)).toList();
       }
-      return [];
+      throw Exception('Registry sync failed (${response.statusCode})');
     } catch (e) {
-      return []; // Return empty on error to prevent crashes, provider handles retry
+      debugPrint('🚨 [NETWORK] Attendance Sync Error: $e');
+      throw Exception('Analytical server is warming up. Please refresh in a moment.');
     }
   }
 

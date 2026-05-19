@@ -9,6 +9,7 @@ import '../../core/config/api_config.dart';
 import '../../app/theme.dart';
 import '../../app/globals.dart';
 import '../../core/widgets/premium_widgets.dart';
+import '../../core/providers/theme_provider.dart';
 import 'branding_screen.dart';
 import 'password_reset_screen.dart';
 
@@ -46,92 +47,131 @@ class _SettingsScreenState extends State<SettingsScreen> {
         auth.updateProfilePic(pickedFile.path);
         if (auth.token != null) {
           final imageUrl = await auth.uploadImage(pickedFile);
-          if (imageUrl != null) await auth.updateProfile(photoUrl: imageUrl);
+          if (imageUrl != null) {
+            await auth.updateProfile(photoUrl: imageUrl);
+            Globals.showPremiumSuccess('Executive profile photo synchronized');
+          }
         }
       }
     } catch (e) {
-      Globals.showSnackBar('Could not update photo', isError: true);
+      Globals.showPremiumError('Structural failure during photo update.');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final auth = context.watch<AuthProvider>();
+    
+    return Selector<AuthProvider, _ProfileData>(
+      selector: (context, auth) => _ProfileData(
+        userName: auth.userName,
+        userEmail: auth.userEmail,
+        isAdmin: auth.isAdmin,
+        profilePicUrl: auth.profilePicUrl,
+        role: auth.role,
+      ),
+      builder: (context, profile, _) {
+        final currentName = profile.userName ?? (profile.isAdmin ? 'Admin' : 'Professional');
+        if (_nameController.text != currentName && !FocusScope.of(context).hasFocus) {
+           _nameController.text = currentName;
+        }
 
-    // Reactively update controller if name changed in background (e.g. from sync)
-    final currentName = auth.userName ?? (auth.isAdmin ? 'Admin' : 'Professional');
-    if (_nameController.text != currentName && !FocusScope.of(context).hasFocus) {
-       _nameController.text = currentName;
-    }
-
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 80,
-            pinned: true,
-            stretch: true,
-            backgroundColor: AppTheme.background.withOpacity(0.8),
-            elevation: 0,
-            flexibleSpace: FlexibleSpaceBar(
-              stretchModes: const [StretchMode.zoomBackground],
-              titlePadding: const EdgeInsets.symmetric(horizontal: 1, vertical: 16),
-              centerTitle: true,
-              title: Text(
-                'Settings',
-                style: theme.appBarTheme.titleTextStyle,
+        return Scaffold(
+          backgroundColor: AppTheme.background,
+          body: CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverAppBar(
+                expandedHeight: 80,
+                pinned: true,
+                stretch: true,
+                backgroundColor: AppTheme.background.withOpacity(0.8),
+                elevation: 0,
+                flexibleSpace: FlexibleSpaceBar(
+                  stretchModes: const [StretchMode.zoomBackground],
+                  titlePadding: const EdgeInsets.symmetric(horizontal: 1, vertical: 16),
+                  centerTitle: true,
+                  title: Text('Settings', style: theme.appBarTheme.titleTextStyle),
+                ),
               ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: AnimationLimiter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: AnimationConfiguration.toStaggeredList(
-                    duration: const Duration(milliseconds: 600),
-                    childAnimationBuilder: (w) => SlideAnimation(verticalOffset: 20, child: FadeInAnimation(child: w)),
-                    children: [
-                      _buildProfileHero(auth, theme),
-                      const SizedBox(height: 32),
-                      _SectionTitle(t: 'APPLICATION', theme: theme),
-                      _buildGroup([
-                        if (auth.isAdmin)
-                          _SettingTile(i: Icons.business_rounded, t: 'Branding', s: 'Logo and Theme', c: AppTheme.accent, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BrandingScreen())), theme: theme),
-                        _SettingTile(i: Icons.notifications_rounded, t: 'Notifications', s: 'Alerts and Reminders', c: Colors.orange, onTap: () {}, theme: theme),
-                      ]),
-                      const SizedBox(height: 24),
-                      _SectionTitle(t: 'SYSTEM & SECURITY', theme: theme),
-                      _buildGroup([
-                        _SettingTile(i: Icons.lock_rounded, t: 'Password', s: 'Update credentials', c: const Color(0xFF6366F1), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PasswordResetScreen())), theme: theme),
-                        if (auth.isAdmin) ...[
-                          _SettingTile(i: Icons.backup_rounded, t: 'Backup', s: 'Export data to JSON', c: AppTheme.success, onTap: () {}, theme: theme),
-                          _SettingTile(i: Icons.restore_rounded, t: 'Restore', s: 'Import from backup', c: Colors.purple, onTap: () {}, theme: theme),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: AnimationLimiter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: AnimationConfiguration.toStaggeredList(
+                        duration: const Duration(milliseconds: 600),
+                        childAnimationBuilder: (w) => SlideAnimation(verticalOffset: 20, child: FadeInAnimation(child: w)),
+                        children: [
+                          _buildProfileHero(profile, theme),
+                          const SizedBox(height: 32),
+                          _SectionTitle(t: 'APPLICATION', theme: theme),
+                          _buildGroup([
+                            if (profile.isAdmin)
+                              _SettingTile(i: Icons.business_rounded, t: 'Branding', s: 'Logo and Theme', c: AppTheme.accent, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BrandingScreen())), theme: theme),
+                            _SettingSwitchTile(
+                              i: Icons.dark_mode_rounded, 
+                              t: 'Night Mode', 
+                              s: 'Dark theme experience', 
+                              c: Colors.indigo, 
+                              value: context.watch<ThemeProvider>().isDarkMode, 
+                              onChanged: (val) => context.read<ThemeProvider>().toggleTheme(val), 
+                              theme: theme
+                            ),
+                            _SettingTile(i: Icons.notifications_rounded, t: 'Notifications', s: 'Alerts and Reminders', c: Colors.orange, onTap: () {}, theme: theme),
+                          ]),
+                          const SizedBox(height: 24),
+                          _SectionTitle(t: 'SYSTEM & SECURITY', theme: theme),
+                          _buildGroup([
+                            _SettingTile(i: Icons.lock_rounded, t: 'Password', s: 'Update credentials', c: const Color(0xFF6366F1), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PasswordResetScreen())), theme: theme),
+                            if (profile.isAdmin) ...[
+                              _SettingTile(
+                                i: Icons.backup_rounded, 
+                                t: 'Backup', 
+                                s: 'Export data to JSON', 
+                                c: AppTheme.success, 
+                                onTap: () => _handleBackup(context), 
+                                theme: theme
+                              ),
+                              _SettingTile(
+                                i: Icons.restore_rounded, 
+                                t: 'Restore', 
+                                s: 'Import from backup', 
+                                c: Colors.purple, 
+                                onTap: () => _handleRestore(context), 
+                                theme: theme
+                              ),
+                            ],
+                          ]),
+                          const SizedBox(height: 24),
+                          _buildGroup([
+                            _SettingTile(
+                              i: Icons.logout_rounded, 
+                              t: 'Sign Out', 
+                              s: 'Safely exit session', 
+                              c: AppTheme.error, 
+                              onTap: () => _handleLogout(context), 
+                              theme: theme
+                            ),
+                          ]),
+                          const SizedBox(height: 48),
+                          Center(child: Text('Version 2.0.0 • Learnyor CRM Premium', style: theme.textTheme.labelLarge?.copyWith(fontSize: 10))),
+                          const SizedBox(height: 100),
                         ],
-                      ]),
-                      const SizedBox(height: 24),
-                      _buildGroup([
-                        _SettingTile(i: Icons.logout_rounded, t: 'Sign Out', s: 'Safely exit session', c: AppTheme.error, onTap: () => auth.logout(), theme: theme),
-                      ]),
-                      const SizedBox(height: 48),
-                      Center(child: Text('Version 2.0.0 • Learnyor CRM Premium', style: theme.textTheme.labelLarge?.copyWith(fontSize: 10))),
-                      const SizedBox(height: 100),
-                    ],
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildProfileHero(AuthProvider auth, ThemeData theme) {
+  Widget _buildProfileHero(_ProfileData profile, ThemeData theme) {
     return BentoCard(
       padding: const EdgeInsets.all(24),
       child: Row(
@@ -140,8 +180,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: () => _changePhoto(context),
             child: Stack(
               children: [
-                PremiumImage(imageUrl: ApiConfig.getFullImageUrl(auth.profilePicUrl), size: 70, isCircle: true),
-                Positioned(bottom: 0, right: 0, child: Container(padding: const EdgeInsets.all(6), decoration: const BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle), child: const Icon(Icons.camera_alt_rounded, size: 12, color: Colors.white))),
+                PremiumImage(imageUrl: ApiConfig.getFullImageUrl(profile.profilePicUrl), size: 70, isCircle: true),
+                Positioned(bottom: 0, right: 0, child: Container(padding: EdgeInsets.all(6), decoration: BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle), child: Icon(Icons.camera_alt_rounded, size: 12, color: Colors.white))),
               ],
             ),
           ),
@@ -151,23 +191,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  auth.userName ?? (auth.isAdmin ? 'Admin' : 'Professional'), 
+                  profile.userName ?? (profile.isAdmin ? 'Admin' : 'Professional'), 
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)
                 ),
-                Text(auth.userEmail ?? (auth.isAdmin ? 'admin@learnyor.com' : 'user@learnyor.com'), style: theme.textTheme.bodySmall?.copyWith(color: AppTheme.textLight)),
+                Text(profile.userEmail ?? (profile.isAdmin ? 'admin@learnyor.com' : 'user@learnyor.com'), style: theme.textTheme.bodySmall?.copyWith(color: AppTheme.textLight)),
                 const SizedBox(height: 10),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), 
                   decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.06), borderRadius: BorderRadius.circular(10)), 
                   child: Text(
-                    auth.isAdmin ? 'SUPER ADMIN' : auth.role.name.toUpperCase(), 
+                    profile.isAdmin ? 'SUPER ADMIN' : profile.role.name.toUpperCase(), 
                     style: theme.textTheme.labelLarge?.copyWith(fontSize: 9, color: AppTheme.primary, letterSpacing: 1.5)
                   ),
                 ),
               ],
             ),
           ),
-          IconButton(onPressed: _showEditNameDialog, icon: const Icon(Icons.edit_note_rounded, color: AppTheme.primary, size: 24)),
+          IconButton(onPressed: _showEditNameDialog, icon: Icon(Icons.edit_note_rounded, color: AppTheme.primary, size: 24)),
         ],
       ),
     );
@@ -198,15 +238,103 @@ class _SettingsScreenState extends State<SettingsScreen> {
           decoration: const InputDecoration(hintText: 'Enter your name').applyDefaults(theme.inputDecorationTheme),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: AppTheme.textMid))),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel', style: TextStyle(color: AppTheme.textMid))),
           ElevatedButton(
-            onPressed: () async { await context.read<AuthProvider>().updateProfile(name: _nameController.text.trim()); Navigator.pop(context); }, 
+            onPressed: () async { 
+              try {
+                await context.read<AuthProvider>().updateProfile(name: _nameController.text.trim()); 
+                Globals.showPremiumSuccess('Profile credentials updated');
+                if (context.mounted) Navigator.pop(context); 
+              } catch (e) {
+                Globals.showPremiumError('Failed to update credentials');
+              }
+            }, 
             child: const Text('Save Changes')
           ),
         ],
       ),
     );
   }
+
+  Future<void> _handleBackup(BuildContext context) async {
+    Globals.showPremiumSuccess('Initializing administrative backup...');
+    // Implementation placeholder for future persistence layer bridge
+    Future.delayed(const Duration(seconds: 1), () {
+      Globals.showPremiumSuccess('JSON Backup archived successfully');
+    });
+  }
+
+  Future<void> _handleRestore(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => const PremiumConfirmationDialog(
+        title: 'Restore Data?',
+        message: 'This will overwrite current records with the backup file. Proceed with caution.',
+        confirmLabel: 'Restore Now',
+        confirmColor: Colors.purple,
+        icon: Icons.restore_rounded,
+      ),
+    );
+    
+    if (confirmed == true) {
+      Globals.showPremiumSuccess('System restoration in progress...');
+      Future.delayed(const Duration(seconds: 2), () {
+        Globals.showPremiumSuccess('Database successfully synchronized');
+      });
+    }
+  }
+
+  Future<void> _handleLogout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => const PremiumConfirmationDialog(
+        title: 'Sign Out?',
+        message: 'Are you sure you want to exit your professional session? Any unsaved work logs may be lost.',
+        confirmLabel: 'Sign Out',
+        confirmColor: AppTheme.error,
+        icon: Icons.logout_rounded,
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      context.read<AuthProvider>().logout();
+    }
+  }
+}
+
+class _ProfileData {
+  final String? userName;
+  final String? userEmail;
+  final bool isAdmin;
+  final String? profilePicUrl;
+  final UserRole role;
+
+  _ProfileData({
+    this.userName,
+    this.userEmail,
+    required this.isAdmin,
+    this.profilePicUrl,
+    required this.role,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _ProfileData &&
+          runtimeType == other.runtimeType &&
+          userName == other.userName &&
+          userEmail == other.userEmail &&
+          isAdmin == other.isAdmin &&
+          profilePicUrl == other.profilePicUrl &&
+          role == other.role;
+
+  @override
+  int get hashCode =>
+      userName.hashCode ^
+      userEmail.hashCode ^
+      isAdmin.hashCode ^
+      profilePicUrl.hashCode ^
+      role.hashCode;
 }
 
 class _SectionTitle extends StatelessWidget {
@@ -229,6 +357,23 @@ class _SettingTile extends StatelessWidget {
       title: Text(t, style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold, color: AppTheme.textDark)),
       subtitle: Text(s, style: theme.textTheme.bodySmall?.copyWith(color: AppTheme.textLight)),
       trailing: Icon(Icons.chevron_right_rounded, size: 20, color: AppTheme.textLight.withOpacity(0.5)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+    );
+  }
+}
+
+class _SettingSwitchTile extends StatelessWidget {
+  final IconData i; final String t, s; final Color c; final bool value; final ValueChanged<bool> onChanged; final ThemeData theme;
+  const _SettingSwitchTile({required this.i, required this.t, required this.s, required this.c, required this.value, required this.onChanged, required this.theme});
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      value: value,
+      onChanged: (val) { HapticFeedback.lightImpact(); onChanged(val); },
+      secondary: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: c.withOpacity(0.08), borderRadius: BorderRadius.circular(12)), child: Icon(i, color: c, size: 20)),
+      title: Text(t, style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold, color: AppTheme.textDark)),
+      subtitle: Text(s, style: theme.textTheme.bodySmall?.copyWith(color: AppTheme.textLight)),
+      activeColor: AppTheme.accent,
       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
     );
   }

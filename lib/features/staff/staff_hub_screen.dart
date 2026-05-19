@@ -6,8 +6,6 @@ import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../core/providers/auth_provider.dart';
 import '../../core/providers/report_provider.dart';
-import '../../core/providers/employee_provider.dart';
-import '../../core/providers/intern_provider.dart';
 import '../../core/widgets/premium_widgets.dart';
 
 class StaffHubScreen extends StatelessWidget {
@@ -15,10 +13,18 @@ class StaffHubScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Authentication Guard: Prevents building complex UI during logout transition
+    final auth = context.watch<AuthProvider>();
+    if (!auth.isLoggedIn) {
+      return Scaffold(
+        backgroundColor: AppTheme.background,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     debugPrint('💼 [BUILD] StaffHubScreen');
     final theme = Theme.of(context);
     
-    final auth = context.read<AuthProvider>();
     final userEmail = auth.userEmail ?? 'anonymous';
     
     // Selective Watching: Only rebuild if the current staff's reports change
@@ -47,12 +53,20 @@ class StaffHubScreen extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Hi, ${auth.userName?.split(' ').first ?? 'Staff'}', 
+                  Text('Hi, ${auth.userName?.split(' ').first ?? (auth.role.name == 'intern' ? 'Intern' : 'Staff')}', 
                     style: theme.appBarTheme.titleTextStyle?.copyWith(fontSize: 26)),
                   Text(today, style: theme.textTheme.labelLarge?.copyWith(fontSize: 10, color: AppTheme.textMid)),
                 ],
               ),
             ),
+            actions: [const NotificationBell(),
+              IconButton(
+                icon: Icon(Icons.settings_rounded, color: AppTheme.primary),
+                onPressed: () => context.push('/settings'),
+              ),
+              
+              const SizedBox(width: 8),
+            ],
           ),
           SliverToBoxAdapter(
             child: Padding(
@@ -88,12 +102,22 @@ class StaffHubScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                   if (myReports.isEmpty)
                     _buildEmptyState(theme)
-                  else
-                    ...myReports.map((report) => _buildReportCard(report, theme)),
-                  const SizedBox(height: 100),
                 ],
               ),
             ),
+          ),
+          if (myReports.isNotEmpty)
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => _buildReportCard(myReports[index], theme),
+                  childCount: myReports.length,
+                ),
+              ),
+            ),
+          const SliverToBoxAdapter(
+            child: SizedBox(height: 100),
           ),
         ],
       ),
@@ -124,7 +148,7 @@ class StaffHubScreen extends StatelessWidget {
           const SizedBox(height: 16),
           Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
           const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(fontSize: 10, color: AppTheme.textMid)),
+          Text(subtitle, style: TextStyle(fontSize: 10, color: Color.fromARGB(255, 71, 105, 80))),
         ],
       ),
     );
@@ -181,7 +205,7 @@ class StaffHubScreen extends StatelessWidget {
               children: report.tasks.map<Widget>((t) => Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(color: AppTheme.divider, borderRadius: BorderRadius.circular(6)),
-                child: Text('#$t', style: const TextStyle(fontSize: 10, color: AppTheme.textMid, fontWeight: FontWeight.bold)),
+                child: Text('#$t', style: TextStyle(fontSize: 10, color: AppTheme.textMid, fontWeight: FontWeight.bold)),
               )).toList(),
             ),
           ],

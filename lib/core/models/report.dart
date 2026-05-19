@@ -11,6 +11,7 @@ class WorkReport {
   final List<String> tasks;
   final int hoursWorked;
   final ReportStatus status;
+  final List<String> attachments;
 
   WorkReport({
     required this.id,
@@ -21,6 +22,7 @@ class WorkReport {
     required this.tasks,
     required this.hoursWorked,
     this.status = ReportStatus.pending,
+    this.attachments = const [],
   });
 
   Map<String, dynamic> toMap() {
@@ -33,6 +35,7 @@ class WorkReport {
       'tasks': tasks,
       'hoursWorked': hoursWorked,
       'status': status.toString().split('.').last,
+      'attachments': attachments,
     };
   }
 
@@ -49,6 +52,7 @@ class WorkReport {
         (e) => e.toString().split('.').last == map['status'],
         orElse: () => ReportStatus.pending,
       ),
+      attachments: List<String>.from(map['attachments'] ?? []),
     );
   }
 

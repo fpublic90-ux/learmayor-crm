@@ -2,38 +2,70 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  // --- Modern Studio Palette (Deep Obsidian & Indigo) ---
+  static bool isDarkMode = false;
+
+  // --- Light Palette ---
+  static const Color _lightPrimary = Color(0xFF0F172A); // Deep Obsidian
+  static const Color _lightPrimaryLight = Color(0xFF1E293B); 
+  static const Color _lightPrimarySubtle = Color(0xFFF1F5F9); 
   
-  static const Color primary = Color(0xFF0F172A); // Deep Obsidian
-  static const Color primaryLight = Color(0xFF1E293B); 
-  static const Color primarySubtle = Color(0xFFF1F5F9); 
+  static const Color _lightAccent = Color(0xFF6366F1); // Vibrant Indigo
+  static const Color _lightAccentLight = Color(0xFF818CF8); 
+  static const Color _lightAccentSubtle = Color(0xFFEEF2FF); 
   
-  static const Color accent = Color(0xFF6366F1); // Vibrant Indigo
-  static const Color accentLight = Color(0xFF818CF8); 
-  static const Color accentSubtle = Color(0xFFEEF2FF); 
+  static const Color _lightBackground = Color(0xFFF8FAFC); // Porcelain
+  static const Color _lightSurface = Colors.white;
+  static const Color _lightBorder = Color(0xFFE2E8F0); 
+  static const Color _lightDivider = Color(0xFFF1F5F9); 
   
-  // Alias for backward compatibility
-  static const Color secondary = accent;
+  static const Color _lightTextDark = Color(0xFF0F172A); 
+  static const Color _lightTextMid = Color(0xFF475569); 
+  static const Color _lightTextLight = Color(0xFF94A3B8); 
+
+  // --- Dark Palette ---
+  static const Color _darkPrimary = Color(0xFFF8FAFC); 
+  static const Color _darkPrimaryLight = Color(0xFFE2E8F0); 
+  static const Color _darkPrimarySubtle = Color(0xFF1E293B); 
   
-  // Semantic Colors
+  static const Color _darkAccent = Color(0xFF818CF8); 
+  static const Color _darkAccentLight = Color(0xFFA5B4FC); 
+  static const Color _darkAccentSubtle = Color(0xFF312E81); 
+  
+  static const Color _darkBackground = Color(0xFF0F172A); 
+  static const Color _darkSurface = Color(0xFF1E293B); 
+  static const Color _darkBorder = Color(0xFF334155); 
+  static const Color _darkDivider = Color(0xFF1E293B); 
+  
+  static const Color _darkTextDark = Color(0xFFF8FAFC); 
+  static const Color _darkTextMid = Color(0xFFCBD5E1); 
+  static const Color _darkTextLight = Color(0xFF64748B); 
+
+  // --- Getters ---
+  static Color get primary => isDarkMode ? _darkPrimary : _lightPrimary;
+  static Color get primaryLight => isDarkMode ? _darkPrimaryLight : _lightPrimaryLight;
+  static Color get primarySubtle => isDarkMode ? _darkPrimarySubtle : _lightPrimarySubtle;
+  
+  static Color get accent => isDarkMode ? _darkAccent : _lightAccent;
+  static Color get accentLight => isDarkMode ? _darkAccentLight : _lightAccentLight;
+  static Color get accentSubtle => isDarkMode ? _darkAccentSubtle : _lightAccentSubtle;
+  
+  static Color get secondary => accent;
+  
+  static Color get background => isDarkMode ? _darkBackground : _lightBackground;
+  static Color get surface => isDarkMode ? _darkSurface : _lightSurface;
+  static Color get border => isDarkMode ? _darkBorder : _lightBorder;
+  static Color get divider => isDarkMode ? _darkDivider : _lightDivider;
+  
+  static Color get textDark => isDarkMode ? _darkTextDark : _lightTextDark;
+  static Color get textMid => isDarkMode ? _darkTextMid : _lightTextMid;
+  static Color get textLight => isDarkMode ? _darkTextLight : _lightTextLight;
+
+  // Semantic Colors (Shared)
   static const Color success = Color(0xFF10B981); 
   static const Color successSubtle = Color(0xFFECFDF5); 
-  
-  static const Color warning = Color(0xFFF59E0B); // Amber
-  
+  static const Color warning = Color(0xFFF59E0B); 
   static const Color error = Color(0xFFEF4444); 
   static const Color errorSubtle = Color(0xFFFEF2F2); 
-  
-  // Background & Surface
-  static const Color background = Color(0xFFF8FAFC); // Porcelain
-  static const Color surface = Colors.white;
-  static const Color border = Color(0xFFE2E8F0); 
-  static const Color divider = Color(0xFFF1F5F9); 
-  
-  // Text Colors
-  static const Color textDark = Color(0xFF0F172A); 
-  static const Color textMid = Color(0xFF475569); 
-  static const Color textLight = Color(0xFF94A3B8); 
 
   // Shadows
   static List<BoxShadow> get softShadow => [
@@ -64,7 +96,7 @@ class AppTheme {
       ),
       
       // Modern Studio Typography
-      textTheme: GoogleFonts.outfitTextTheme(const TextTheme(
+      textTheme: GoogleFonts.outfitTextTheme(TextTheme(
         displayLarge: TextStyle(
           fontSize: 32,
           fontWeight: FontWeight.w900,
@@ -93,7 +125,7 @@ class AppTheme {
           fontSize: 18,
           fontWeight: FontWeight.bold,
           color: textDark,
-        ),
+        ),  
         bodyLarge: TextStyle(
           fontSize: 16,
           color: textMid,
@@ -122,7 +154,7 @@ class AppTheme {
           color: textDark,
           letterSpacing: -0.5,
         ),
-        iconTheme: const IconThemeData(color: textDark, size: 20),
+        iconTheme: IconThemeData(color: textDark, size: 20),
       ),
 
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -145,7 +177,7 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(28),
-          side: const BorderSide(color: border, width: 1),
+          side: BorderSide(color: border, width: 1),
         ),
       ),
 
@@ -159,11 +191,11 @@ class AppTheme {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: border, width: 1),
+          borderSide: BorderSide(color: border, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: accent, width: 1.5),
+          borderSide: BorderSide(color: accent, width: 1.5),
         ),
         hintStyle: GoogleFonts.inter(color: textLight, fontSize: 14),
         labelStyle: GoogleFonts.outfit(color: textMid, fontWeight: FontWeight.bold),

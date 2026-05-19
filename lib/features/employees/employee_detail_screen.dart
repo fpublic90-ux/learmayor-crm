@@ -47,7 +47,7 @@ class EmployeeDetailScreen extends StatelessWidget {
             ),
             actions: [
               IconButton(
-                icon: const Icon(Icons.edit_note_rounded, color: AppTheme.primary),
+                icon: Icon(Icons.edit_note_rounded, color: AppTheme.primary),
                 onPressed: () => context.push('/employees/add', extra: employee.toMap()),
               ),
               IconButton(
