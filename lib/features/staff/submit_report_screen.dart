@@ -274,7 +274,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
     final auth = context.read<AuthProvider>();
 
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         allowMultiple: true,
         type: FileType.custom,
         allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'png', 'jpeg', 'webp'],
@@ -383,57 +383,5 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
     );
   }
 
-  Future<bool> _requestStoragePermission() async {
-    if (kIsWeb) return true;
 
-    // Check modern storage status
-    var status = await Permission.storage.status;
-    if (status.isGranted) return true;
-
-    status = await Permission.storage.request();
-    if (status.isGranted) return true;
-
-    // Direct them to App settings if permanently denied
-    if (status.isPermanentlyDenied) {
-      _showSettingsDialog();
-      return false;
-    }
-
-    return false;
-  }
-
-  void _showSettingsDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text(
-          'Storage Permission Required',
-          style: TextStyle(fontWeight: FontWeight.w900, color: AppTheme.textDark),
-        ),
-        content: Text(
-          'To attach supporting documents and images, please enable storage access in your app settings.',
-          style: TextStyle(color: AppTheme.textMid),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('CANCEL', style: TextStyle(color: AppTheme.textLight, fontWeight: FontWeight.bold)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              await openAppSettings();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: const Text('OPEN SETTINGS'),
-          ),
-        ],
-      ),
-    );
-  }
 }
