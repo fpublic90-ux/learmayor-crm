@@ -276,8 +276,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
     try {
       final result = await FilePicker.pickFiles(
         allowMultiple: true,
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'png', 'jpeg', 'webp'],
+        type: FileType.any,
       );
 
       if (!mounted) return;
@@ -285,7 +284,13 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
       if (result != null && result.files.isNotEmpty) {
         setState(() => _isUploadingFile = true);
         
+        final allowedExts = ['pdf', 'doc', 'docx', 'jpg', 'png', 'jpeg', 'webp'];
         for (final file in result.files) {
+          final ext = file.extension?.toLowerCase() ?? '';
+          if (ext.isNotEmpty && !allowedExts.contains(ext)) {
+            Globals.showSnackBar('File format not allowed: ${file.name}', isError: true);
+            continue;
+          }
           final request = http.MultipartRequest(
             'POST', 
             Uri.parse('${ApiConfig.baseUrl}/api/upload-document')
