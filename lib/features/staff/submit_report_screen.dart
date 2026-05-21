@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrintStack;
 import '../../core/config/api_config.dart';
 import '../../app/theme.dart';
 import '../../app/globals.dart';
@@ -57,9 +56,27 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
   }
 
   Future<void> _handleSubmit() async {
-    debugPrint('🚀 [ACTION] Initiating Report Submission');
-    if (_descriptionController.text.trim().isEmpty) {
-      debugPrint('⚠️ [VALIDATION] Report Description Empty');
+    debugPrint('============================================================');
+    debugPrint('🚀 [SUBMIT REPORT] REPORT SUBMISSION FORM SUBMITTED');
+    debugPrint('============================================================');
+    
+    final hoursText = _hoursController.text.trim();
+    final descriptionText = _descriptionController.text.trim();
+    
+    debugPrint('📝 [SUBMIT REPORT] Form State Details:');
+    debugPrint('   - Hours worked input: "$hoursText"');
+    debugPrint('   - Description input: "$descriptionText"');
+    debugPrint('   - Tasks count: ${_tasks.length}');
+    for (int i = 0; i < _tasks.length; i++) {
+      debugPrint('     [$i]: ${_tasks[i]}');
+    }
+    debugPrint('   - Attachments count: ${_attachments.length}');
+    for (int i = 0; i < _attachments.length; i++) {
+      debugPrint('     [$i]: ${_attachments[i]}');
+    }
+
+    if (descriptionText.isEmpty) {
+      debugPrint('⚠️ [VALIDATION] Report Description is empty. Aborting submission.');
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please describe your work')));
       return;
     }
@@ -67,34 +84,60 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
     setState(() => _isSubmitting = true);
     
     final auth = context.read<AuthProvider>();
+    
+    final maskedToken = auth.token != null && auth.token!.length > 15 
+        ? '${auth.token!.substring(0, 8)}...${auth.token!.substring(auth.token!.length - 8)}' 
+        : '<no-token-or-short>';
+        
+    debugPrint('👤 [SUBMIT REPORT] User Authentication Info:');
+    debugPrint('   - User Name: "${auth.userName}"');
+    debugPrint('   - User Email: "${auth.userEmail}"');
+    debugPrint('   - Token exists: ${auth.token != null}');
+    debugPrint('   - Token masked: Bearer $maskedToken');
+
     final report = WorkReport(
       id: const Uuid().v4(),
       staffId: auth.userEmail ?? 'anonymous',
       staffName: auth.userName ?? 'Staff Member',
       date: DateTime.now(),
-      description: _descriptionController.text.trim(),
+      description: descriptionText,
       tasks: _tasks,
-      hoursWorked: int.tryParse(_hoursController.text) ?? 0,
+      hoursWorked: int.tryParse(hoursText) ?? 0,
       status: ReportStatus.pending,
       attachments: _attachments,
     );
 
-    debugPrint('📡 [NET] Dispatching Report: ${report.id} for ${report.staffName}');
+    debugPrint('📦 [SUBMIT REPORT] Serialization Map:');
+    try {
+      final map = report.toMap();
+      debugPrint('   - Map structure: $map');
+      final jsonStr = report.toJson();
+      debugPrint('   - JSON string: $jsonStr');
+    } catch (e) {
+      debugPrint('⚠️ [SUBMIT REPORT] Could not serialize report: $e');
+    }
+
+    debugPrint('📡 [SUBMIT REPORT] Dispatching to ReportProvider.submitReport()...');
     final result = await context.read<ReportProvider>().submitReport(report);
     
     if (mounted) {
       setState(() => _isSubmitting = false);
       result.when(
         onSuccess: (_) {
-          debugPrint('✅ [SUCCESS] Report Persistent on Server');
+          debugPrint('✅ [SUBMIT REPORT SUCCESS] Report successfully persisted on Server!');
+          debugPrint('============================================================');
           Navigator.pop(context);
           Globals.showSnackBar('Report submitted successfully!');
         },
         onFailure: (e) {
-          debugPrint('❌ [ERROR] Submission Failed: ${e.toString()}');
+          debugPrint('❌ [SUBMIT REPORT FAILURE] Submission failed:');
+          debugPrint('   - Error details: ${e.toString()}');
+          debugPrint('============================================================');
           Globals.showSnackBar('Submission failed: ${e.toString()}', isError: true);
         },
       );
+    } else {
+      debugPrint('⚠️ [SUBMIT REPORT] Screen unmounted after submission response. Handling silently.');
     }
   }
 
@@ -274,34 +317,60 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
     final auth = context.read<AuthProvider>();
 
     try {
+      debugPrint('📂 [FILE PICKER] Initiating File Selection');
       final result = await FilePicker.pickFiles(
         allowMultiple: true,
         type: FileType.any,
       );
 
-      if (!mounted) return;
+      if (!mounted) {
+        debugPrint('⚠️ [FILE PICKER] Screen unmounted after picker closed');
+        return;
+      }
 
       if (result != null && result.files.isNotEmpty) {
+        debugPrint('✅ [FILE PICKER] Selected ${result.files.length} file(s)');
         setState(() => _isUploadingFile = true);
         
         final allowedExts = ['pdf', 'doc', 'docx', 'jpg', 'png', 'jpeg', 'webp'];
-        for (final file in result.files) {
+        for (int i = 0; i < result.files.length; i++) {
+          final file = result.files[i];
           final ext = file.extension?.toLowerCase() ?? '';
+          
+          debugPrint('----------------------------------------');
+          debugPrint('📄 [FILE PICKER] Processing File ${i + 1}/${result.files.length}:');
+          debugPrint('   - Name: ${file.name}');
+          debugPrint('   - Extension: "$ext"');
+          debugPrint('   - Size: ${file.size} bytes');
+          debugPrint('   - Local Path: ${file.path ?? "N/A (Web/No path)"}');
+          debugPrint('   - Bytes available: ${file.bytes != null ? "${file.bytes!.length} bytes" : "null"}');
+          debugPrint('----------------------------------------');
+
           if (ext.isNotEmpty && !allowedExts.contains(ext)) {
+            debugPrint('❌ [VALIDATION] Extension "$ext" not allowed. Allowed: $allowedExts');
             Globals.showSnackBar('File format not allowed: ${file.name}', isError: true);
             continue;
           }
-          final request = http.MultipartRequest(
-            'POST', 
-            Uri.parse('${ApiConfig.baseUrl}/api/upload-document')
-          );
+
+          final uploadUrl = '${ApiConfig.baseUrl}/api/upload-document';
+          debugPrint('📡 [UPLOAD] Endpoint URL: $uploadUrl');
+          final request = http.MultipartRequest('POST', Uri.parse(uploadUrl));
           
           if (auth.token != null) {
-            request.headers['Authorization'] = 'Bearer ${auth.token}';
+            final t = auth.token!;
+            final maskedToken = t.length > 15 
+                ? '${t.substring(0, 8)}...${t.substring(t.length - 8)}' 
+                : '<short-token>';
+            request.headers['Authorization'] = 'Bearer $t';
+            debugPrint('   - Auth Token provided (Masked: Bearer $maskedToken)');
+          } else {
+            debugPrint('   - No Auth Token found in AuthProvider');
           }
 
           if (kIsWeb) {
+            debugPrint('   - Running on WEB environment');
             if (file.bytes != null) {
+              debugPrint('   - Adding file bytes to request (${file.bytes!.length} bytes)');
               request.files.add(
                 http.MultipartFile.fromBytes(
                   'file', 
@@ -309,35 +378,64 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                   filename: file.name
                 )
               );
+            } else {
+              debugPrint('❌ [UPLOAD ERROR] File bytes are null on web for: ${file.name}');
             }
           } else {
+            debugPrint('   - Running on NATIVE environment');
             if (file.path != null) {
+              debugPrint('   - Adding file path to request: ${file.path}');
               request.files.add(
                 await http.MultipartFile.fromPath('file', file.path!)
               );
+            } else {
+              debugPrint('❌ [UPLOAD ERROR] File path is null on native for: ${file.name}');
             }
           }
 
+          debugPrint('📡 [UPLOAD] Sending request...');
           final response = await request.send();
+          debugPrint('📡 [UPLOAD] Response Status Code: ${response.statusCode}');
+          debugPrint('📡 [UPLOAD] Response Headers: ${response.headers}');
+
+          final respStr = await response.stream.bytesToString();
+          debugPrint('📡 [UPLOAD] Raw Response Body:');
+          debugPrint(respStr);
+
           if (response.statusCode == 200) {
-            final respStr = await response.stream.bytesToString();
-            final data = jsonDecode(respStr);
-            final fileUrl = data['fileUrl'];
-            if (fileUrl != null) {
-              setState(() {
-                _attachments.add(fileUrl);
-              });
+            try {
+              final data = jsonDecode(respStr);
+              debugPrint('✅ [UPLOAD] Decoded JSON Data: $data');
+              final fileUrl = data['fileUrl'];
+              if (fileUrl != null) {
+                debugPrint('✅ [UPLOAD] Extracted fileUrl: $fileUrl');
+                setState(() {
+                  _attachments.add(fileUrl);
+                });
+              } else {
+                debugPrint('❌ [UPLOAD ERROR] "fileUrl" key is missing from JSON response: $data');
+                Globals.showSnackBar('Upload format mismatch for ${file.name}', isError: true);
+              }
+            } catch (jsonErr) {
+              debugPrint('❌ [UPLOAD ERROR] Failed to parse JSON response: $jsonErr');
+              Globals.showSnackBar('Invalid response format for ${file.name}', isError: true);
             }
           } else {
+            debugPrint('❌ [UPLOAD ERROR] Server returned error code: ${response.statusCode}');
             Globals.showSnackBar('Failed to upload ${file.name}', isError: true);
           }
         }
+      } else {
+        debugPrint('⚠️ [FILE PICKER] File picker cancelled or returned empty selection');
       }
-    } catch (e) {
-      debugPrint('Error picking/uploading file: $e');
+    } catch (e, s) {
+      debugPrint('❌ [FILE PICKER ERROR] Exception caught during file selection or upload:');
+      debugPrint(e.toString());
+      debugPrintStack(stackTrace: s);
       Globals.showSnackBar('Error uploading file: $e', isError: true);
     } finally {
       setState(() => _isUploadingFile = false);
+      debugPrint('🏁 [FILE PICKER] Upload operation complete. Active attachments: $_attachments');
     }
   }
 
