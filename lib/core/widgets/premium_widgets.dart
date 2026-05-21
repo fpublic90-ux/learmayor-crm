@@ -895,3 +895,192 @@ class PremiumButton extends StatelessWidget {
     );
   }
 }
+
+/// A high-fidelity, premium in-app image viewer supporting interactive pinch-to-zoom and glassmorphism.
+class PremiumImageViewer extends StatelessWidget {
+  final String imageUrl;
+
+  const PremiumImageViewer({
+    super.key,
+    required this.imageUrl,
+  });
+
+  /// Opens the built-in premium image viewer with a beautiful transition and haptic feedback.
+  static void show(BuildContext context, String imageUrl) {
+    HapticFeedback.lightImpact();
+    showGeneralDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.85),
+      barrierDismissible: true,
+      barrierLabel: 'Close Image Viewer',
+      transitionDuration: const Duration(milliseconds: 250),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return PremiumImageViewer(imageUrl: imageUrl);
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.95, end: 1.0).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            ),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        children: [
+          // Glassmorphic backdrop blur
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Navigator.of(context).pop();
+              },
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: Container(
+                  color: Colors.black.withOpacity(0.4),
+                ),
+              ),
+            ),
+          ),
+          
+          // Image viewer with InteractiveViewer for multi-touch zoom and pan
+          Positioned.fill(
+            child: SafeArea(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+                  child: InteractiveViewer(
+                    panEnabled: true,
+                    scaleEnabled: true,
+                    minScale: 0.5,
+                    maxScale: 4.0,
+                    child: Hero(
+                      tag: imageUrl,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: imageUrl.startsWith('http')
+                            ? CachedNetworkImage(
+                                imageUrl: imageUrl,
+                                fit: BoxFit.contain,
+                                placeholder: (context, url) => const Center(
+                                  child: CircularProgressIndicator(
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  width: double.infinity,
+                                  height: 250,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: const Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.error_outline_rounded, color: Colors.white70, size: 40),
+                                      SizedBox(height: 12),
+                                      Text(
+                                        'Failed to load image',
+                                        style: TextStyle(color: Colors.white70, fontSize: 14),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            : imageUrl.startsWith('/') || imageUrl.contains(':\\')
+                                ? Image.file(
+                                    File(imageUrl),
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) => Container(
+                                      width: double.infinity,
+                                      height: 250,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: const Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.error_outline_rounded, color: Colors.white70, size: 40),
+                                          SizedBox(height: 12),
+                                          Text(
+                                            'Failed to load image file',
+                                            style: TextStyle(color: Colors.white70, fontSize: 14),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                : Container(
+                                    width: double.infinity,
+                                    height: 250,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: const Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.broken_image_rounded, color: Colors.white70, size: 40),
+                                        SizedBox(height: 12),
+                                        Text(
+                                          'Invalid image path',
+                                          style: TextStyle(color: Colors.white70, fontSize: 14),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          
+          // Floating Close Button with glassmorphism
+          Positioned(
+            top: 24,
+            right: 24,
+            child: SafeArea(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(30),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.3),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Colors.white, size: 24),
+                      onPressed: () {
+                        HapticFeedback.mediumImpact();
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

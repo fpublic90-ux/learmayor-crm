@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:learnyor_hrm/core/models/report.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -98,7 +99,7 @@ class StaffHubScreen extends StatelessWidget {
                   ),
 
                   const SizedBox(height: 32),
-                  _buildRecentLogsHeader(theme),
+                  _buildRecentLogsHeader(context, theme),
                   const SizedBox(height: 16),
                   if (myReports.isEmpty)
                     _buildEmptyState(theme)
@@ -111,7 +112,7 @@ class StaffHubScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (context, index) => _buildReportCard(myReports[index], theme),
+                  (context, index) => _buildReportCard(context, myReports[index], theme),
                   childCount: myReports.length,
                 ),
               ),
@@ -154,12 +155,18 @@ class StaffHubScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildRecentLogsHeader(ThemeData theme) {
+  Widget _buildRecentLogsHeader(BuildContext context, ThemeData theme) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text('RECENT WORK LOGS', style: theme.textTheme.labelLarge),
-        TextButton(onPressed: () {}, child: const Text('View All')),
+        TextButton(
+          onPressed: () {
+            HapticFeedback.lightImpact();
+            context.push('/reports');
+          },
+          child: const Text('View All'),
+        ),
       ],
     );
   }
@@ -179,13 +186,17 @@ class StaffHubScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildReportCard(dynamic report, ThemeData theme) {
+  Widget _buildReportCard(BuildContext context, WorkReport report, ThemeData theme) {
     final statusStr = report.status.toString().split('.').last;
     final statusColor = statusStr == 'approved' ? AppTheme.success : (statusStr == 'rejected' ? AppTheme.error : AppTheme.accent);
     
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: BentoCard(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          context.push('/reports/detail', extra: report);
+        },
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -200,14 +211,16 @@ class StaffHubScreen extends StatelessWidget {
             const SizedBox(height: 12),
             Text(report.description, style: theme.textTheme.bodyMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              children: report.tasks.map<Widget>((t) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: AppTheme.divider, borderRadius: BorderRadius.circular(6)),
-                child: Text('#$t', style: TextStyle(fontSize: 10, color: AppTheme.textMid, fontWeight: FontWeight.bold)),
-              )).toList(),
-            ),
+            if (report.tasks.isNotEmpty)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: report.tasks.map<Widget>((t) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: AppTheme.divider, borderRadius: BorderRadius.circular(6)),
+                  child: Text('#$t', style: TextStyle(fontSize: 10, color: AppTheme.textMid, fontWeight: FontWeight.bold)),
+                )).toList(),
+              ),
           ],
         ),
       ),

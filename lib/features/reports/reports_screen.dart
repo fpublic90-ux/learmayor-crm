@@ -191,14 +191,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   // --- STAFF VIEW: PERSONAL PRODUCTIVITY ---
-  Future<void> _handleStatusUpdate(BuildContext context, ReportProvider provider, String id, ReportStatus status) async {
-    final result = await provider.updateReportStatus(id, status);
-    result.when(
-      onSuccess: (_) => Globals.showSnackBar('Report ${status.name}'),
-      onFailure: (e) => Globals.showSnackBar('Update failed: ${e.toString()}', isError: true),
-    );
-  }
-
   Widget _buildStaffReports(BuildContext context, AuthProvider auth) {
     final theme = Theme.of(context);
     final reportProvider = context.watch<ReportProvider>();
@@ -313,6 +305,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: BentoCard(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          context.push('/reports/detail', extra: report);
+        },
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -366,11 +362,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       ),
                     ),
                     onPressed: () async {
-                      final uri = Uri.parse(url);
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      debugPrint('📂 [LAUNCH ATTACHMENT] Attempting to open URL: $url');
+                      final isImage = url.toLowerCase().contains(RegExp(r'\.(jpg|jpeg|png|webp|gif|bmp)')) || url.contains('image/upload');
+                      if (isImage) {
+                        PremiumImageViewer.show(context, url);
                       } else {
-                        Globals.showSnackBar('Could not open attachment', isError: true);
+                        final uri = Uri.parse(url);
+                        try {
+                          final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          if (!launched) {
+                            Globals.showSnackBar('Could not open attachment', isError: true);
+                          }
+                        } catch (e) {
+                          Globals.showSnackBar('Could not open attachment', isError: true);
+                        }
                       }
                     },
                     backgroundColor: AppTheme.background,

@@ -1,6 +1,8 @@
 import 'package:go_router/go_router.dart';
 import 'package:learnyor_hrm/features/notifications/notification_screen.dart';
 import '../core/providers/auth_provider.dart';
+import '../core/models/report.dart';
+import '../features/reports/report_detail_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
 import '../features/employees/employees_screen.dart';
@@ -86,6 +88,10 @@ class AppRouter {
             GoRoute(path: '/attendance', builder: (_, __) => const AttendanceScreen()),
             GoRoute(path: '/reports', builder: (_, __) => const ReportsScreen()),
             GoRoute(path: '/reports/admin', builder: (_, __) => const AdminReportsListScreen()),
+            GoRoute(
+              path: '/reports/detail',
+              builder: (_, state) => ReportDetailScreen(report: state.extra as WorkReport),
+            ),
             GoRoute(path: '/reports/leave', builder: (_, __) => const AdminLeaveListScreen()),
             GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
             GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingVaultScreen()),

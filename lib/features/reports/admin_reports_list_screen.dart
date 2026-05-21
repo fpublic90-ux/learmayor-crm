@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:go_router/go_router.dart';
 import '../../app/theme.dart';
 import '../../app/globals.dart';
 import '../../core/providers/report_provider.dart';
@@ -349,6 +350,10 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: BentoCard(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          context.push('/reports/detail', extra: report);
+        },
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -458,11 +463,20 @@ class _AdminReportsListScreenState extends State<AdminReportsListScreen> {
                       ),
                     ),
                     onPressed: () async {
-                      final uri = Uri.parse(url);
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      debugPrint('📂 [LAUNCH ATTACHMENT] Attempting to open URL: $url');
+                      final isImage = url.toLowerCase().contains(RegExp(r'\.(jpg|jpeg|png|webp|gif|bmp)')) || url.contains('image/upload');
+                      if (isImage) {
+                        PremiumImageViewer.show(context, url);
                       } else {
-                        Globals.showSnackBar('Could not open attachment', isError: true);
+                        final uri = Uri.parse(url);
+                        try {
+                          final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          if (!launched) {
+                            Globals.showSnackBar('Could not open attachment', isError: true);
+                          }
+                        } catch (e) {
+                          Globals.showSnackBar('Could not open attachment', isError: true);
+                        }
                       }
                     },
                     backgroundColor: AppTheme.background,

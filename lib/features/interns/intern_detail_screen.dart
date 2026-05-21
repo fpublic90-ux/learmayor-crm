@@ -274,7 +274,11 @@ class InternDetailScreen extends StatelessWidget {
 
   void _launch(String url) async {
     final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) await launchUrl(uri);
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('❌ [QUICK ACTION ERROR] Could not launch $url: $e');
+    }
   }
 
   void _showDeleteDialog(BuildContext context, Intern intern) async {
